@@ -1,0 +1,5 @@
+netsim_name=
+number_of_netsims=
+external_nfs_ip_1=
+external_nfs_ip_2=
+vnx_spa_ip=

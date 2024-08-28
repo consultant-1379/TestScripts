@@ -1,0 +1,12 @@
+#!/bin/bash
+
+FILE=/root/rvb/bin/users.txt
+if [ -f $FILE ]; then
+   for i in `cat $FILE`
+   do
+        echo "deleting $i"
+        /usr/sbin/userdel -r $i
+   done
+else
+   echo "File $FILE does not exist. cp users_template.txt users.txt for whitestar userids"
+fi

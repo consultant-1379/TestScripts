@@ -1,0 +1,11 @@
+#!/bin/bash
+FILE=/tmp/assertion_configurations/assertions_default_config.cfg
+if [ -f $FILE ]; then
+        echo "Backing up $FILE"
+        mv $FILE $FILE.$(date +%F_%R)
+        cp /root/rvb/assertion_configurations/assertions_default_config.cfg /tmp/assertion_configurations/assertions_default_config.cfg
+        chmod 755 $FILE
+else
+        cp /root/rvb/assertion_configurations/assertions_default_config.cfg /tmp/assertion_configurations/assertions_default_config.cfg
+        chmod 755 $FILE
+fi

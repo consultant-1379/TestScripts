@@ -1,0 +1,13 @@
+*IMPORTANT:*
+
+*o IF AN OLD TICKET HAS BEEN CLONED IT WILL BE CLOSED.*
+
+*o The Grifone CONFLUENCE PAGE link under Useful Information in the Description box above provides the correct template.*
+
+*o CHECK* all fields/tables are completed/correct
+
+*o RPM/DD/SED links added in comments will be deleted without notice*
+
+*o When you are ready to start testing* please change ticket Status to *READY.*
+
+*o Tickets left in OPEN status will not be considered*

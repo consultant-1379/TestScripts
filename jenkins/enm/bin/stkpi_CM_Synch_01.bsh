@@ -1,0 +1,26 @@
+#!/bin/bash
+
+TITLE="CM: LTE ENodeB Synch"
+TAG="stkpi_CM_Synch_01"
+NODE=$1
+CLI_APP=/opt/ericsson/enmutils/bin/cli_app
+FILE=/ericsson/enm/dumps/.upgrade_ongoing
+
+sync_node(){
+source ~/.bashrc
+if [ ! -f ${FILE} ] ; then
+         logger INFO "${TAG}" "Syncing" "${NODE}"
+         ${CLI_APP} "cmedit action *${NODE}* CmFunction sync"
+else
+        logger INFO "${TAG}" "upgrade ongoing not running testcase"
+fi
+
+}
+
+if [ -z "$1" ]
+  then
+    logger INFO "${TAG}" "No Node supplied"
+  else
+  sync_node
+fi
+

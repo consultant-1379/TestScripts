@@ -1,0 +1,31 @@
+#!/bin/bash
+CLI_APP=/opt/ericsson/enmutils/bin/cli_app
+NODE=$1
+delete_node(){
+        ${CLI_APP} "cmedit set NetworkElement=${NODE},PmFunction=1 pmEnabled=false"
+        ${CLI_APP} "cmedit set NetworkElement=${NODE},CmNodeHeartbeatSupervision=1 active=false"
+        ${CLI_APP} "cmedit set NetworkElement=${NODE},InventorySupervision=1 active=false"
+        # ${CLI_APP} "fmedit set NetworkElement=${NODE},FmAlarmSupervision=1 alarmSupervisionState=false"
+        ${CLI_APP} "alarm disable ${NODE}"
+        ${CLI_APP} "cmedit action NetworkElement=${NODE},CmFunction=1 deleteNrmDataFromEnm"
+        ${CLI_APP} "cmedit delete NetworkElement=${NODE} -ALL"
+}
+
+
+display_usage() {
+        echo "Please give the name of the node to delete"
+        echo "e.g. /root/rvb/bin/delete_node.bsh LTE16ERBS00003"
+        echo -e "\nUsage:\n$0 [arguments] \n"
+        }
+
+
+
+if [  $# -lt 1 ]
+        then
+                display_usage
+                exit 1
+        fi
+
+
+
+delete_node

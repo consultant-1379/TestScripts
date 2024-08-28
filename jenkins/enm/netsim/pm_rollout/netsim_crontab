@@ -1,0 +1,6 @@
+0,15,30,45 * * * * /netsim_users/pms/bin/genStats -r 15 >> /netsim_users/pms/logs/genStats_15min.log 2>&1
+0,15,30,45 * * * * /netsim_users/pms/bin/lte_rec.sh -r 15 -f CELLTRACE:UETRACE:CTUM >> /netsim_users/pms/logs/lte_rec_15.log 2>&1
+* * * * * /netsim_users/pms/bin/lte_rec.sh -r 1 -f EBS >> /netsim_users/pms/logs/lte_rec_1.log 2>&1
+0 * * * * /netsim_users/pms/bin/rmPmFiles >> /netsim_users/pms/logs/rmFiles.log 2>&1
+39 */3 * * * /netsim_users/pms/bin/create_eutrancell_list.sh >> /dev/null
+#do not do anything

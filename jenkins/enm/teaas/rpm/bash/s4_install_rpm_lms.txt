@@ -1,0 +1,369 @@
+#!/bin/bash -x
+#atrclin3 ssh key
+#ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA5ieZUslhvz3ym/M1ia8PqBDYfc5sOmZHzESKCwtaOvepsZLLDN6pAkYTVckmMWiem//ksDlDPJRoZBH9Nn3tiyh4n3EC5va8Zoukx4euQVBQAetIMugi9t56pzY+qoJSLMhj6xvfO6ipAejUk0slYUZQvXiaJkTfMO6ruXo+uEp7H987FBxzoDBr+TRsWoEZxF5i4R33Yrcjbto1SbbixarB2nVV56sABcPcr2921XD7m/Fv+w6s45lu2xONgs3g+AfvbCkLqB4PnKrnmx69uVyi9XXdso2oKReAv5Htfcy7x7nFnp4hxqkGy3hQ0kfaib6bMan64sj1kOmTjEgBRQ== apache@atrclin3
+
+################## Functions #########################
+
+function OFFLINE_SERVICE_GROUP(){
+
+		service_group=$1
+		vm_hostname=$2
+		count=0;
+		
+		echo "`date +"%T"`: INFO: Retrieving list of running kvms on $vm_hostname"
+		kvm_to_undefine=$(RETRIEVE_KVM_FROM_BLADE $service_group $vm_hostname)
+		if [[ $kvm_to_undefine != "" ]]
+		then
+			echo "`date +"%T"`: INFO: Found kvm (${kvm_to_undefine}) on $vm_hostname" 
+	
+		else
+			echo "`date +"%T"`: WARNING: Could not find a kvm running on $vm_hostname for $service_group"
+			echo "`date +"%T"`: INFO: Trying to guess the name of the kvm" 		
+			kvm_to_undefine=$(RETRIEVE_KVM_FROM_SERVICE_GROUP_NAME $service_group $vm_hostname)
+			if [[ $kvm_to_undefine != "" ]]
+			then
+				echo "`date +"%T"`: INFO: Assuming the name of the kvm is (${kvm_to_undefine}) "
+			else
+				echo "`date +"%T"`: CRITICAL: Cannot assume name of kvm for $service_group on $vm_hostname"
+				wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=FAIL_KVM_NAME"
+				exit; 
+			fi
+								
+		fi	
+		#exit; #REMOVE
+
+		echo "`date +"%T"`: INFO: Taking $service_group OFFLINE on $vm_hostname"
+		wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=OFFLINING_${service_group}"
+		echo "`date +"%T"`: INFO: Running command /opt/ericsson/enminst/bin/vcs.bsh -g ${service_group} -s ${vm_hostname} --offline"
+		/opt/ericsson/enminst/bin/vcs.bsh -g ${service_group} -s ${vm_hostname} --offline &
+		
+		
+		
+		while [[ `/opt/ericsson/enminst/bin/vcs.bsh --groups | grep ${service_group} | grep $vm_hostname | grep OFFLINE | grep -v STARTING | grep -v STOPPING` == "" ]]
+		do
+			if [[ $count == 0 ]]
+			then
+				
+				
+				if [[ $kvm_to_undefine != "" ]]
+				then
+						echo "`date +"%T"`: INFO: Found kvm ($kvm_to_undefine) to undefine on $vm_hostname"	
+				else
+						echo "`date +"%T"`: WARNING: Could not find any kvm to undefine on $vm_hostname"
+				fi
+			fi
+			if [[ $count -gt 40 ]]
+			then
+				echo "`date +"%T"`: CRITICAL: Could not offline $service_group on $vm_hostname"
+				return 1;
+			
+			fi
+			(( count=$count+1 ))
+			echo "`date +"%T"`: INFO: Waiting for ${service_group} on $vm_hostname to OFFLINE (Try ${count} of 40)"
+			sleep 3;
+		done
+		
+		echo "`date +"%T"`: INFO: ${service_group} on ${vm_hostname} is now OFFLINE"
+		
+		echo "`date +"%T"`: INFO: Undefining kvm: $kvm_to_undefine on $vm_hostname"
+		UNDEFINE_KVM $kvm_to_undefine $vm_hostname;
+				
+		return 0;		
+}
+
+function UNDEFINE_KVM(){
+	
+	kvm=$1
+	vm_hostname=$2
+	echo "`date +"%T"`: INFO: Running command /root/rvb/bin/ssh_to_vm_and_su_root.exp $vm_hostname \"virsh undefine $kvm_to_undefine\" "
+	/root/rvb/bin/ssh_to_vm_and_su_root.exp $vm_hostname "virsh undefine $kvm_to_undefine"
+	
+}
+function ONLINE_SERVICE_GROUP(){
+
+	service_group=$1
+	vm_hostname=$2
+	count=0;
+	echo "########### Bringing ${service_group} ONLINE on ${vm_hostname} #################"
+	echo "`date +"%T"`: INFO: Bringing ${service_group} on ${vm_hostname} back ONLINE"
+	wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=ONLINING_${service_group}"
+	echo "`date +"%T"`: INFO: Running command /opt/ericsson/enminst/bin/vcs.bsh -g ${service_group} -s ${vm_hostname} --online"
+	/opt/ericsson/enminst/bin/vcs.bsh -g ${service_group} -s ${vm_hostname} --online &
+	
+	while [[ `/opt/ericsson/enminst/bin/vcs.bsh --groups | grep ${service_group} | grep $vm_hostname | grep ONLINE | grep -v STARTING | grep -v STOPPING` == "" ]]
+		do
+			
+			if [[ $count -gt 40 ]]
+			then
+				echo "`date +"%T"`: CRITICAL: Could not ONLINE $service_group on $vm_hostname"
+				wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=FAIL_ONLINE_${service_group}"
+				exit;
+			
+			fi
+			(( count=$count+1 ))
+			echo "`date +"%T"`: INFO: Waiting for ${service_group} on $vm_hostname to come ONLINE (Try ${count} of 40)"
+			sleep 5;
+		done
+		
+		echo "`date +"%T"`: INFO: ${service_group} on ${vm_hostname} is now ONLINE"
+		
+		
+}
+function RETRIEVE_KVM_FROM_SERVICE_GROUP_NAME(){
+	
+	service_group=$1
+	vm_hostname=$2
+	kvm_name=`echo ${service_group} | awk -F'_' '{print \$5}' `;
+	echo $kvm_name;
+}
+
+function RETRIEVE_KVM_FROM_BLADE(){
+	
+	service_group=$1
+	vm_hostname=$2
+	kvm_name=""
+	/root/rvb/bin/ssh_to_vm_and_su_root.exp $vm_hostname "virsh list" | grep running | awk '{print $2}' | while read kvm
+	do
+		check=`echo ${service_group} | grep "${kvm}"$`
+		if [[ $check != "" ]] 
+		then
+			echo $kvm
+			break	
+		fi
+	done 
+	
+	 	
+	 	
+}
+
+######################### Variables ############################
+DEPLOYMENT_ID=$1
+RPM_URL=$2
+JIRA_TICKET_ID=$3
+install_type=$4
+LIST_OF_SERVICE_GROUPS_TO_OFFLINE=$5
+TIMESTAMP=$6
+LOG_FILE=$7
+ENM_SERVICES_DIR="/var/www/html/ENM_services"
+ENM_MODELS_DIR="/var/www/html/ENM_models"
+RPM_DIR_LMS="/var/tmp"
+RPM_INSTALL_DIR=""
+
+#####################################################
+
+
+
+################ Trap Ctrk C #################################
+
+
+#Include code for trap ctrl c
+
+
+function ctrl_c() {
+
+		echo "`date +"%T"`: INFO: Remvoing Lock file"
+        rm -rf /var/tmp/s4/.lock
+}
+
+
+#################################################
+
+function INSTALL_ORIGNAL_RPM(){
+	
+	echo "`date +"%T"`: INFO: Rolling back the orignal rpm"
+}
+
+function INSTALL_NEW_RPM(){
+	
+	DEPLOYMENT_ID=$1
+	RPM_URL=$2
+	JIRA_TICKET_ID=$3
+	install_type=$4
+	LIST_OF_SERVICE_GROUPS_TO_OFFLINE=$5
+	TIMESTAMP=$6
+	LOG_FILE=$7
+	ENM_SERVICES_DIR="/var/www/html/ENM_services"
+	ENM_MODELS_DIR="/var/www/html/ENM_models"
+	RPM_DIR_LMS="/var/tmp"
+	RPM_INSTALL_DIR=""
+	
+	if [[ ${install_type} == "service_rpm" ]]
+	then
+	
+		echo "`date +"%T"`: INFO: Setting install directory to $ENM_SERVICES_DIR" 
+		RPM_INSTALL_DIR=$ENM_SERVICES_DIR
+	
+	else
+		echo "`date +"%T"`: INFO: Setting install directory to $ENM_MODELS_DIR" 
+		RPM_INSTALL_DIR=$ENM_MODELS_DIR
+		
+	fi
+	
+	###### Download the new RPM onto the LMS ##########
+	
+	NEW_RPM_NAME=`echo ${RPM_URL} | awk -F"/" '{print $NF}'`
+	NEW_RPM_DIR_NAME=`echo ${NEW_RPM_NAME}  | awk -F"." '{$NF=""; print $0}' | tr " " "." | rev | cut -c 2- | rev`
+	NEW_RPM_NAME_SPLIT=`echo ${NEW_RPM_NAME}  | awk -F '-' '{print $1}'`
+	
+	echo "`date +"%T"`: INFO: Downloading new rpm ${NEW_RPM_NAME} to ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${NEW_RPM_DIR_NAME}/"
+	wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=DOWNLOADING_RPM"
+	mkdir -p ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${NEW_RPM_DIR_NAME}; 
+	wget -q ${RPM_URL} -O ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${NEW_RPM_DIR_NAME}/${NEW_RPM_NAME};
+	touch ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${NEW_RPM_DIR_NAME}/${NEW_RPM_NAME};
+	
+	
+	
+	OLD_RPM=`ls  ${RPM_INSTALL_DIR} | grep ${NEW_RPM_NAME_SPLIT} `
+	OLD_RPM_DIR_NAME=`ls ${RPM_INSTALL_DIR} | grep ${NEW_RPM_NAME_SPLIT} | awk -F"." '{$NF=""; print $0}' | tr " " "." | rev | cut -c 2- | rev`
+	### Send orignal rpm name to atrclin3
+	echo "`date +"%T"`: INFO: Sending orignal rpm ${OLD_RPM} and log file name (${LOG_FILE}) to the DB for rollback purposes -"
+	wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_old_rpm_name&old_rpm_name=${OLD_RPM}&log_file_name=${LOG_FILE}&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}"
+	#sleep 20
+	#wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=TESTING1"
+	#echo "########## http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=TESTING1"
+	#sleep 20
+	#wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=COMPLETED"
+	
+	
+	#exit; #REMOVE EXIT AFTER TESTING
+	
+	######### Check if new RPM is the same as the old rpm
+	if [[ ${NEW_RPM_NAME} == ${OLD_RPM} ]]
+	then
+	
+		echo "`date +"%T"`: WARNING: The rpm (${NEW_RPM_NAME}) is already installed on the server"
+		wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=FAIL_ALREADY_INSTALLED"
+		exit; 
+	fi
+	
+	##### Move orignal rpm to /var/tmp/ticket_id/rpm_name
+	
+	if [ -f ${RPM_INSTALL_DIR}/${OLD_RPM} ]
+	then
+		echo "`date +"%T"`: INFO: Making directory for ORIGNAL rpm file - ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${OLD_RPM_DIR_NAME}"
+		mkdir -p ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${OLD_RPM_DIR_NAME}
+		echo "`date +"%T"`: INFO: Moving orignal rpm ${RPM_INSTALL_DIR}/${OLD_RPM} to ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${OLD_RPM_DIR_NAME}"
+		mv ${RPM_INSTALL_DIR}/${OLD_RPM} ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${OLD_RPM_DIR_NAME}
+		
+		#Copy new rpm to RPM_INSTALL_DIR
+		echo "`date +"%T"`: INFO: Copying new rpm ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${NEW_RPM_DIR_NAME}/${NEW_RPM_NAME} to ${RPM_INSTALL_DIR}"
+		cp ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${NEW_RPM_DIR_NAME}/${NEW_RPM_NAME} ${RPM_INSTALL_DIR}
+	
+		# Service of model rpm
+		echo "`date +"%T"`: INFO: Creating yum repo"
+		echo "`date +"%T"`: INFO: Running commands cd ${RPM_INSTALL_DIR};createrepo .;yum clean all;"
+		cd ${RPM_INSTALL_DIR};createrepo . ;yum clean all;
+		
+	else
+	
+		echo "`date +"%T"`: WARNING: No RPM found matching ${OLD_RPM} in ${RPM_DIR_LMS}/${JIRA_TICKET_ID}/${OLD_RPM_DIR_NAME}"
+		echo "`date +"%T"`: INFO: Proceeding to install rpm regardless"
+	fi	
+
+	
+}
+
+
+################ Trap exit #################################
+
+cleanup() {
+	rv=$?
+	echo "`date +"%T"`: INFO: Uploading logs (${LOG_FILE}) to remote DB"
+	base64logs=`cat ${LOG_FILE} | sed 's/$/<br>/' | base64`
+	
+	#curl --request POST "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_logs&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}" --data-urlencode "b64logs=${base64logs}"
+	
+	
+	echo "`date +"%T"`: INFO: Exiting";    
+    rm -rf /var/tmp/s4/.srv_groups
+	rm -rf /var/tmp/s4/.lock
+    exit $rv
+    
+}
+
+trap "cleanup" INT TERM EXIT
+
+
+# trap ctrl-c and call ctrl_c()
+trap ctrl_c INT
+#####################################################################################
+
+
+#Check if there is an existing version of s4_install_rpm_lms.sh running
+while [  -f  /var/tmp/s4/.lock ]
+do
+
+	echo "`date +"%T"`: WAITING: for previous job to finish. Sleeping...";
+	wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=WAIT_SLEEPING"
+	
+	sleep 2;
+	
+done
+
+
+
+
+#Create lock file
+touch /var/tmp/s4/.lock
+
+
+
+# Check to see if its a new rpm install or a rollback
+
+if [[ `echo $RPM_URL | grep http` != "" ]]
+then
+
+	echo "`date +"%T"`: INFO: Installing new rpm "
+	INSTALL_NEW_RPM ${DEPLOYMENT_ID} ${RPM_URL} ${JIRA_TICKET_ID} ${install_type} ${LIST_OF_SERVICE_GROUPS_TO_OFFLINE} ${TIMESTAMP} ${LOG_FILE}
+			
+else
+	echo "`date +"%T"`: INFO: INSTALL_ORIGNAL_RPM function"
+	exit;
+	#INSTALL_ORIGNAL_RPM ${DEPLOYMENT_ID} ${RPM_URL} ${JIRA_TICKET_ID} ${install_type} ${LIST_OF_SERVICE_GROUPS_TO_OFFLINE} ${TIMESTAMP}
+fi
+
+
+
+
+#### Get a ist of all service groups
+/opt/ericsson/enminst/bin/vcs.bsh --groups | grep Grp > /var/tmp/s4/.srv_groups
+
+echo ${LIST_OF_SERVICE_GROUPS_TO_OFFLINE} | tr "," "\n" | awk -F"," '{print $1}' | while read service_group
+do {
+	cat /var/tmp/s4/.srv_groups | grep ${service_group} | awk '{ print $3 }'  | while read vm_hostname
+	do {
+		hostname=${vm_hostname};
+		echo "########### Taking ${service_group} OFFLINE on ${vm_hostname} #################"
+		echo "`date +"%T"`: INFO: Processing ${service_group} on ${vm_hostname}"
+		OFFLINE_SERVICE_GROUP ${service_group} ${vm_hostname} ;
+		exit_code=$?
+		echo "`date +"%T"`: INFO: OFFLINE_SERVICE_GROUP exit code: $exit_code ";
+		if [[ $exit_code != 0 ]]
+		then
+				echo "`date +"%T"`: CRITICAL: Could not offline $service_group on ${vm_hostname}"
+				#exit;
+		fi
+		
+		ONLINE_SERVICE_GROUP ${service_group} ${vm_hostname} ;
+		exit_code=$?
+		echo "`date +"%T"`: INFO: ONLINE_SERVICE_GROUP exit code: $exit_code ";
+		if [[ $exit_code != 0 ]]
+		then
+				echo "`date +"%T"`: CRITICAL: Could not ONLINE $service_group on ${vm_hostname}"
+				exit;
+		else
+				echo "`date +"%T"`: INFO: $service_group on ${vm_hostname} is now back ONLINE"
+		fi
+		
+		
+	} < /dev/null;
+	done 
+} < /dev/null; 
+done 
+		echo "`date +"%T"`: Updating Jira ticket (${JIRA_TICKET_ID}) to reflect rpm install" 
+		wget -q "http://atrclin3.athtem.eei.ericsson.se/TestScripts/jenkins/enm/teaas/rpm/include/handler.php?step=update_status&jira_ticket_id=${JIRA_TICKET_ID}&timestamp=${TIMESTAMP}&status=COMPLETED"
+		#Update Jira with the information
+		curl -D- -u S4_Team:S4_Team  -H "Content-Type: application/json" -H "Accept: application/json" -X POST --data "{ \"body\": \"Hi \n The following package has been installed on ${DEPLOYMENT_ID}.\n \n Packacge Url Link: ${RPM_URL}\n Package Name: ${NEW_RPM_NAME}\n\" }" https://jira-nam.lmera.ericsson.se/rest/api/2/issue/${JIRA_TICKET_ID}/comment
+		
+
+

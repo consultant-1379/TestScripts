@@ -1,0 +1,325 @@
+#!/bin/bash
+
+export PGPASSWORD=P0stgreSQL11
+cli_app="/opt/ericsson/enmutils/bin/cli_app"
+ropstart=$1
+ropend=$2
+POSTGRES_NODE=`/opt/ericsson/enminst/bin/vcs.bsh --groups | grep postgres | grep ONLINE | awk '{print $3}'`
+PSQL_PATH=`find /opt/rh/ -name psql`
+
+[ ! -d /ericsson/enm/dumps/flsdb_pm_rop_stats/ ] && mkdir -p /ericsson/enm/dumps/flsdb_pm_rop_stats/ && chmod 777 /ericsson/enm/dumps/flsdb_pm_rop_stats/
+
+if [ $# -ne 2 ]
+then
+echo "  Syntax ERROR  "
+echo "  	./flsdb_pm_rop_stats.bsh <rop_start_time> <rop_end_time>  "
+echo "Eg: 	./flsdb_pm_rop_stats.bsh 12:00 12:15 "
+echo
+exit 1
+fi
+
+if [ -d /ericsson/enm/dumps/pmic_collect_stats/ ]; then
+        echo "/ericsson/enm/dumps/pmic_collect_stats/ already exists"
+else
+        echo "Creating directory /ericsson/enm/dumps/pmic_collect_stats/"
+        mkdir -p /ericsson/enm/dumps/pmic_collect_stats/
+fi
+
+general_flsdb_info(){
+        echo
+        echo -e "\e[0;32mNUMBER OF ROWS/ENTRIES IN FLSDB:\e[0m"
+        echo -e "\e[0;32m================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "SELECT count(*) from pm_rop_info;" | sed "s/^/\t/g"
+
+        echo -e "\e[0;32mCOUNT OF # OF EACH FILE TYPE IN FLSDB:\e[0m"
+        echo -e "\e[0;32m======================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "SELECT data_type, count(*) FROM pm_rop_info  group by data_type ;" | sed "s/^/\t/g"
+
+        echo -e "\e[0;32mSIZE OF EACH PM FILE TYPE / NODE TYPE STORED IN FLSDB:\e[0m"
+        echo -e "\e[0;32m======================================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select node_type, data_type, sum(file_size)/1024/1024 AS Total_FileSizes_In_FLSDB_In_MB, count(data_type) AS Number_of_Files_Collected from pm_rop_info group by node_type, data_type order by total_filesizes_in_flsdb_in_mb;"| sed "s/^/\t/g"
+
+        echo -e "\e[0;32mOVERALL SIZE OF FLSDB:\e[0m"
+        echo -e "\e[0;32m======================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "SELECT pg_size_pretty(pg_database_size('flsdb')) AS flsdb_size;" | sed "s/^/\t/g"
+
+        echo -e "\e[0;32mINDEX SIZE FOR PM_ROP_INFO TABLE:\e[0m"
+        echo -e "\e[0;32m=================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "SELECT pg_size_pretty(pg_indexes_size('pm_rop_info')) AS pm_rop_info_index_size;" | sed "s/^/\t/g"
+
+        echo -e "\e[0;32mACTUAL SIZE OF DATA IN PM_ROP_INFO TABLE:\e[0m"
+        echo -e "\e[0;32m=========================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "SELECT pg_size_pretty(pg_relation_size('pm_rop_info')) AS pm_rop_info_rel_size;" | sed "s/^/\t/g"
+}
+
+first_file_collected(){
+        echo
+        echo -e "\e[0;32mTIME FIRST FILE WAS COLLECTED IN THE ${ropstart} ROP:\e[0m"
+        echo -e "\e[0;32m===============================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select * from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) ${ropstart}:00' and end_roptime_in_oss='$(date +%Y-%m-%d) ${ropend}:00' order by file_creationtime_in_oss;" | egrep -v "EBSM|SIU02|TCU02" | awk '{print $16}' | egrep -v "\||^$" | head -1| sed "s/^/\t/g"
+}
+
+last_file_collected(){
+        echo
+        echo -e "\e[0;32mTIME LAST FILE WAS COLLECTED IN THE ${ropstart} ROP:\e[0m"
+        echo -e "\e[0;32m==============================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select * from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) ${ropstart}:00' and end_roptime_in_oss='$(date +%Y-%m-%d) ${ropend}:00' order by file_creationtime_in_oss;" |awk '{print $16}' | grep -v "^$" | tail -1 | sed "s/^/\t/g"
+}
+
+number_files_collected() {
+        echo
+        echo -e "\e[0;32mNUMBER OF FILES COLLECTED IN THE ${ropstart} ROP:\e[0m"
+        echo -e "\e[0;32m===========================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select * from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) ${ropstart}:00' and end_roptime_in_oss='$(date +%Y-%m-%d) ${ropend}:00';" | grep row| sed "s/^/\t/g"
+}
+
+gather_rop_list_to_file() {
+        echo
+        echo -e "\e[0;32mGENERATING LIST OF FILES COLLECTED IN THE ${ropstart} ROP TO A FILE:\e[0m"
+        echo -e "\e[0;32m==============================================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select * from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) ${ropstart}:00' and end_roptime_in_oss='$(date +%Y-%m-%d) ${ropend}:00';" > /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend}| sed "s/^/\t/g"
+                echo -e "List of files collected for ${ropstart} ROP written to /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend}"| sed "s/^/\t/g"
+
+}
+
+total_gb_collected_in_rop(){
+        echo
+        echo -e "\e[0;32mTOTAL SIZE OF FILES IN THE ${ropstart} ROP (IN GB):\e[0m"
+        echo -e "\e[0;32m=============================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select sum(file_size)/1024/1024/1024 AS rop_size_in_gb from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) ${ropstart}:00' and end_roptime_in_oss='$(date +%Y-%m-%d) ${ropend}:00';"| sed "s/^/\t/g"
+}
+
+file_collection_sizes_in_rop() {
+        echo
+        echo -e "\e[0;32mSUMMARY OF FILE SIZES PER NODE TYPE COLLECTED IN THE ${ropstart} ROP:\e[0m"
+        echo -e "\e[0;32m===============================================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select node_type, data_type, avg(file_size/1024) AS avg_compressed_File_Size_In_KB, sum(file_size)/1024/1024 AS Total_FileSize_15Min_Data_In_MB, count(data_type) AS Number_of_Files_Collected from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) ${ropstart}:00' and end_roptime_in_oss='$(date +%Y-%m-%d) ${ropend}:00' group by node_type, data_type order by node_type;"| sed "s/^/\t/g"
+}
+
+file_collection_sizes_in_flsdb() {
+        echo
+        echo -e "\e[0;32mSUMMARY OF FILE SIZES PER NODE TYPE COLLECTED IN THE FLSDB IN TOTAL:\e[0m"
+        echo -e "\e[0;32m====================================================================\e[0m"
+                ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select node_type, data_type, sum(file_size)/1024/1024 AS Total_FileSizes_In_FLSDB_In_MB, count(data_type) AS Number_of_Files_Collected from pm_rop_info group by node_type, data_type order by total_filesizes_in_flsdb_in_mb;"| sed "s/^/\t/g"
+}
+
+last_files_collected_in_rop() {
+        echo
+        echo -e "\e[0;32mLIST OF THE LAST FILES COLLECTED IN THE ${ropstart} ROP:\e[0m"
+        echo -e "\e[0;32m=====================================================\e[0m"
+               ${PSQL_PATH} -h ${POSTGRES_NODE} -U postgres -d flsdb -c "select * from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) ${ropstart}:00' and end_roptime_in_oss='$(date +%Y-%m-%d) ${ropend}:00' order by file_creationtime_in_oss;" | tail -20 | sed "s/^/\t/g"
+}
+
+echo
+date
+echo
+echo -e "\e[0;34mCOMMENCING PM QUERIES on POSTGRES FLSDB TABLE:\e[0m"
+echo -e "\e[0;34m=============================================\e[0m"
+general_flsdb_info
+first_file_collected
+last_file_collected
+number_files_collected
+total_gb_collected_in_rop
+last_files_collected_in_rop
+file_collection_sizes_in_rop
+
+echo -e "\e[0;32mDETERMINING THE NUMBER OF EACH NODE TYPE. PLEASE WAIT:\e[0m"
+echo -e "\e[0;34m======================================================\e[0m"
+        for TYPE in `/opt/ericsson/enmutils/bin/cli_app "cmedit get * NetworkElement.neType" | grep neType | cut -d":" -f2 | sort -u`; do echo -en "${TYPE}:\t"; /opt/ericsson/enmutils/bin/cli_app "cmedit get * NetworkElement -ne=${TYPE} -ns=OSS_NE_DEF -cn" | tail -1;done| sed "s/^/\t/g"
+
+NUM_BSC=`${cli_app} 'cmedit get * NetworkElement -ne=BSC -cn' | tail -1 | awk '{print $1}'`
+NUM_DSC=`${cli_app} 'cmedit get * NetworkElement -ne=DSC -cn' | tail -1 | awk '{print $1}'`
+NUM_EPG=`${cli_app} 'cmedit get * ManagedElement -ne=EPG -cn' | tail -1 | awk '{print $1}'`
+NUM_ERBS=`${cli_app} 'cmedit get * NetworkElement -netype=ERBS -cn' | tail -1 | awk '{print $1}'`
+NUM_LTE_DG2=`${cli_app} 'cmedit get * NetworkElement -ne=RadioNode' |grep -ci dg2`
+NUM_MGW=`${cli_app} 'cmedit get * NetworkElement -netype=MGW -cn' | tail -1 | awk '{print $1}'`
+NUM_MINI_LINK_6352=`${cli_app} 'cmedit get * NetworkElement -ne=MINI-LINK-6352 -cn' | tail -1 | awk '{print $1}'`
+NUM_MINI_LINK_Indoor=`${cli_app} 'cmedit get * NetworkElement -ne=MINI-LINK-Indoor -cn' | tail -1 | awk '{print $1}'`
+NUM_MIXED=`${cli_app} 'cmedit get * NetworkElement.technologyDomain -t'|grep UMTS | grep -v SGSN | grep EPS -c`
+NUM_MSC_BC_BSP=`${cli_app} 'cmedit get * NetworkElement -ne=MSC-BC-BSP -cn' | tail -1 | awk '{print $1}'`
+NUM_MSC_BC_IS=`${cli_app} 'cmedit get * NetworkElement -ne=MSC-BC-IS -cn' | tail -1 | awk '{print $1}'`
+NUM_MSC_DB_BSP=`${cli_app} 'cmedit get * NetworkElement -ne=MSC-DB-BSP -cn' | tail -1 | awk '{print $1}'`
+NUM_MSRBS=`${cli_app} 'cmedit get * NetworkElement -ne=RadioNode' |grep -ci MSRBS`
+NUM_MTAS=`${cli_app} 'cmedit get * NetworkElement -ne=MTAS -cn' | tail -1 | awk '{print $1}'`
+NUM_RBS=`${cli_app} 'cmedit get * NetworkElement -ne=RBS -cn' | tail -1 | awk '{print $1}'`
+NUM_RNC=`${cli_app} 'cmedit get * NetworkElement -ne=RNC -cn' | tail -1 | awk '{print $1}'`
+NUM_Router6672=`${cli_app} 'cmedit get * NetworkElement -netype=Router6672 -cn' | tail -1 | awk '{print $1}'`
+NUM_SGSNMME=`${cli_app} 'cmedit get * NetworkElement -netype=SGSN-MME -cn' | tail -1 | awk '{print $1}'`
+NUM_SIU02=`${cli_app} 'cmedit get * NetworkElement -ne=SIU02 -cn' | tail -1 | awk '{print $1}'`
+NUM_TCU02=`${cli_app} 'cmedit get * NetworkElement -ne=TCU02 -cn' | tail -1 | awk '{print $1}'`
+
+
+gather_rop_list_to_file
+
+echo
+echo -e "\e[0;32mTOTAL # OF PM FILES COLLECTED IN THE ${ropstart} ROP:\e[0m"
+echo -e "\e[0;34m===============================================\e[0m"
+cat /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | egrep -v "id|---|rows|^$" | wc -l | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM STATS FILE COLLECTION:\e[0m"
+echo -e "\e[0;34m=========================\e[0m"
+echo -n "Total Stats files for BSC (Out of ${NUM_BSC} Nodes): " | sed "s/^/\t/g"
+awk '$5=="BSC"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for DSC (Out of ${NUM_DSC} Nodes): " | sed "s/^/\t/g"
+awk '$5=="DSC"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for EPG (Out of ${NUM_EPG} Nodes): " | sed "s/^/\t/g"
+awk '$5=="EPG"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for ERBS (Out of ${NUM_ERBS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="ERBS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for RadioNode/DG2 (Out of ${NUM_LTE_DG2} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RadioNode"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep PM_STATISTICAL | grep -vc MSRBS | sed "s/^/\t/g"
+
+echo -n "Total Stats files for MGW (Out of ${NUM_MGW} Nodes): " | sed "s/^/\t/g"
+awk '$5=="MGW"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for MINI-LINK-6352 (Out of ${NUM_MINI_LINK_6352} Nodes): " | sed "s/^/\t/g"
+awk '$5=="MINI-LINK-6352"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for MINI-LINK-Indoor (Out of ${NUM_MINI_LINK_Indoor} Nodes): " | sed "s/^/\t/g"
+awk '$5=="MINI-LINK-Indoor"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for MSC-BC-BSP (Out of ${NUM_MSC_BC_BSP} Nodes): " | sed "s/^/\t/g"
+awk '$5=="MSC-BC-BSP"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for MSC-BC-IS (Out of ${NUM_MSC_BC_IS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="MSC-BC-IS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for MSC-DB-BSP (Out of ${NUM_MSC_DB_BSP} Nodes): " | sed "s/^/\t/g"
+awk '$5=="MSC-DB-BSP"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for MSRBS (Out of ${NUM_MSRBS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RadioNode"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep PM_STATISTICAL | grep -c MSRBS | sed "s/^/\t/g"
+
+echo -n "Total Stats files for MTAS (Out of ${NUM_MTAS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="MTAS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for RBS (Out of ${NUM_RBS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RBS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for RNC (Out of ${NUM_RNC} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RNC"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for Router6672 (Out of ${NUM_Router6672} Nodes): " | sed "s/^/\t/g"
+awk '$5=="Router6672"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for SGSN (Out of ${NUM_SGSNMME} Nodes): " | sed "s/^/\t/g"
+awk '$5=="SGSN-MME"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for SIU02 (Out of ${NUM_SIU02} Nodes): " | sed "s/^/\t/g"
+awk '$5=="SIU02"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo -n "Total Stats files for TCU02 (Out of ${NUM_TCU02} Nodes): " | sed "s/^/\t/g"
+awk '$5=="TCU02"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_STATISTICAL | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM CELLTRACE (LOW PRIORITY):\e[0m"
+echo -e "\e[0;34m============================\e[0m"
+echo -n "Total CellTrace (low prio) files for ERBS (Out of ${NUM_ERBS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="ERBS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep PM_CELLTRACE | grep -c _DUL1_1.bin.gz | sed "s/^/\t/g"
+echo -n "Total CellTrace (low prio) files for RadioNode/DG2 (Out of ${NUM_LTE_DG2} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RadioNode"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep PM_CELLTRACE | grep dg2 | grep -c _DUL1_1.bin.gz | sed "s/^/\t/g"
+echo -n "Total CellTrace (low prio) files for Mixed Mode MSRBS (Out of ${NUM_MIXED} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RadioNode"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep PM_CELLTRACE | grep MSRBS | grep -c _DUL1_1.bin.gz | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM CELLTRACE (HIGH PRIORITY):\e[0m"
+echo -e "\e[0;34m=============================\e[0m"
+echo -n "Total CellTrace (high prio) files for ERBS (Out of ${NUM_ERBS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="ERBS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep PM_CELLTRACE | grep -c _DUL1_3.bin.gz | sed "s/^/\t/g"
+echo -n "Total CellTrace (high prio) files for RadioNode/DG2 (Out of ${NUM_LTE_DG2} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RadioNode"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep PM_CELLTRACE | grep dg2 | grep -c _DUL1_3.bin.gz | sed "s/^/\t/g"
+echo -n "Total CellTrace (high prio) files for Mixed Mode MSRBS (Out of ${NUM_MIXED} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RadioNode"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep PM_CELLTRACE | grep MSRBS | grep -c _DUL1_3.bin.gz | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM CTUM COLLECTION:\e[0m"
+echo -e "\e[0;34m===================\e[0m"
+echo -n "Total CTUM files for ${NUM_SGSNMME} SGSN-MME nodes collected in this ROP: " | sed "s/^/\t/g"
+awk '$5=="SGSN-MME"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_CTUM | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM CTR COLLECTION:\e[0m"
+echo -e "\e[0;34m==================\e[0m"
+echo -n "Total CTR files for RNC (Out of ${NUM_RNC} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RNC"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_CELLTRAFFIC | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM UETR COLLECTION:\e[0m"
+echo -e "\e[0;34m===================\e[0m"
+echo -n "Total UETR files for RNC (Out of ${NUM_RNC} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RNC"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_UETR | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM GPEH COLLECTION:\e[0m"
+echo -e "\e[0;34m===================\e[0m"
+echo -n "Total GPEH files for RNC (Out of ${NUM_RNC} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RNC"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_GPEH | sed "s/^/\t/g"
+
+echo -n "Total GPEH files for RBS (Out of ${NUM_RBS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RBS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_GPEH | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM UETRACE COLLECTION:\e[0m"
+echo -e "\e[0;34m======================\e[0m"
+echo -n "Total UETrace files for ERBS (Out of 320 Nodes): " | sed "s/^/\t/g"
+awk '$5=="ERBS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_UETRACE | sed "s/^/\t/g"
+echo -n "Total UETrace files for LTE DG2 RadioNodes  (Out of 160 Nodes): " | sed "s/^/\t/g"
+awk '$5=="RadioNode"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_UETRACE | sed "s/^/\t/g"
+echo -n "Total UETrace files for SGSN-MME (Out of ${NUM_SGSNMME} Nodes): " | sed "s/^/\t/g"
+awk '$5=="SGSN-MME"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_UETRACE | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM EBSL COLLECTION:\e[0m"
+echo -e "\e[0;34m===================\e[0m"
+echo -n "Total EBSL files for ERBS (Out of ${NUM_ERBS} Nodes): " | sed "s/^/\t/g"
+awk '$5=="ERBS"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_EBSL | sed "s/^/\t/g"
+echo -n "Total EBSL files for LTE DG2 RadioNodes (Out of ${NUM_LTE_DG2} Nodes): " | sed "s/^/\t/g"
+awk '$5=="RadioNode"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_EBSL | sed "s/^/\t/g"
+
+
+echo
+echo -e "\e[0;32mPM EBM COLLECTION:\e[0m"
+echo -e "\e[0;34m==================\e[0m"
+echo -n "Total EBM files for ${NUM_SGSNMME} SGSN-MME nodes collected in this ROP: " | sed "s/^/\t/g"
+awk '$5=="SGSN-MME"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_EBM | sed "s/^/\t/g"
+
+echo
+echo -e "\e[0;32mPM EBSM COLLECTION:\e[0m"
+echo -e "\e[0;34m===================\e[0m"
+echo -n "Total EBSM_3GPP files for ${NUM_SGSNMME} SGSN-MME nodes collected in this ROP: " | sed "s/^/\t/g"
+awk '$5=="SGSN-MME"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_EBSM_3GPP | sed "s/^/\t/g"
+echo -n "Total EBSM_ENIQ files for ${NUM_SGSNMME} SGSN-MME nodes collected in this ROP: " | sed "s/^/\t/g"
+awk '$5=="SGSN-MME"' /ericsson/enm/dumps/pmic_collect_stats/pm_rop_$(date +%Y-%m-%d)_${ropstart}_${ropend} | grep -c PM_EBSM_ENIQ | sed "s/^/\t/g"
+
+echo
+date
+echo
+
+#RNC GPEH collection stats:
+#${PSQL_PATH} -h ieatrcxb6406 -U postgres -d flsdb -c "select * from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) 12:00:00' and end_roptime_in_oss='$(date +%Y-%m-%d) 12:15:00' and node_type='RNC' and data_type='PM_GPEH' and file_size!='240' order by file_creationtime_in_oss;"
+
+#List files collected after a certain time and limit to 20 rows.
+#select * from pm_rop_info where start_roptime_in_oss='$(date +%Y-%m-%d) 12:00:00' and end_roptime_in_oss='$(date +%Y-%m-%d) 12:15:00 AND  file_creationtime_in_oss >= ‘2017-05-12 12:35:00’ order by file_creationtime_in_oss limit 20;
+
+#File data types:
+#PM_CELLTRACE
+#PM_CELLTRAFFIC
+#PM_CTUM
+#PM_GPEH
+#PM_STATISTICAL
+#PM_UETR
+#PM_UETRACE
+
+#awk '$5=="RNC"' /tmp/pm_rop2017-05-12_15\:00 | grep -c PM_STATISTICAL
+#awk '$5=="RNC"' /tmp/pm_rop2017-05-12_15\:00 | awk '$7=="PM_CELLTRAFFIC"' | wc -l
+#20
+#[16:28:03 root@ieatlms6370:~ ]# awk '$5=="RadioNode"' /tmp/pm_rop2017-05-12_15\:00 | grep -c PM_STATISTICAL
+#6480
+#[16:29:05 root@ieatlms6370:~ ]# awk '$5=="RadioNode"' /tmp/pm_rop2017-05-12_15\:00 | grep PM_STATISTICAL|less
+#[16:29:29 root@ieatlms6370:~ ]#
+#[16:29:29 root@ieatlms6370:~ ]# awk '$5=="RadioNode"' /tmp/pm_rop2017-05-12_15\:00 | grep PM_STATISTICAL|grep -c MSRBS

@@ -1,0 +1,35 @@
+#!/bin/bash
+
+TAG="run_versant_consistency"
+function run_cc(){
+FILE=/ericsson/enm/dumps/.upgrade_ongoing
+if [ ! -f ${FILE} ] ; then
+        logger INFO "${TAG}" "starting backup_and_consistency_check_database.sh"
+        /ericsson/versant/dbscripts/consistency_check/backup_and_consistency_check_database.sh --db_name=dps_integration
+else
+        logger INFO "${TAG}" "upgrade ongoing not running backup_and_consistency_check_database.sh"
+fi
+}
+
+
+
+
+
+function start_check(){
+
+  #To be implemented when multiple databases are introduced
+  #VERSANT_PID=$(ps -ef | $GREP 'cleanbe\|vserver' | $GREP ${DB_NAME})
+  CLEANBE_PID=$(pgrep cleanbe)
+  OBE_PID=$(pgrep obe)
+  #if obe /cleanbe process exist
+  if [ ! -z ${CLEANBE_PID} ] && [ ! -z ${OBE_PID} ]; then
+        run_cc
+  else
+        logger INFO "${TAG}" "Versant not running Here!!!!"
+  fi
+
+}
+
+#MAIN
+
+start_check

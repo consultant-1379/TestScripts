@@ -1,0 +1,22 @@
+
+<html>
+    <head></head>
+    <body>
+        <p>Hi {0},<br><br>
+           Regarding ticket <a href='{1}'>{3}</a>.<br><br>
+           A user has been created for you on deployment <a href='{2}'>{4}</a>.<br><br>
+           Username: <b>{3}</b><br>
+           Password: <b>{6}</b><br><br>
+           Connect to the Deployment using: {7}<br>
+           Connect to the Workload VM using: {12}<br>
+           <b>DETS Credentials are valid Workload VM ONLY</b><br><br>
+           To SSH to a VM you will need to do <br>
+           sudo ssh -i /root/.ssh/vm_private_key cloud-user@target-vm<br><br>
+           This user and its home directory <b><em>will be deleted when <a href='{1}'>{3}</a>
+           moves out of its testing slot</em></b>.<br><br>
+           You can view this deployment on <a href='{10}'>DDP</a>.<br><br>
+           Regards,<br>
+           {11}
+        </p>
+     </body>
+ </html>

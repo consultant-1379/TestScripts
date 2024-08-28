@@ -1,0 +1,13 @@
+#!/bin/sh
+SIMLIST=`ls /netsim/netsimdir | grep RNC | grep -v zip | grep -v txt`
+RNC=`ls /netsim/netsimdir | grep RNC | grep -v zip | grep -v txt | awk -F- '{print $NF}'`
+for LTE in $SIMLIST
+
+ do
+
+
+        echo '.open' $LTE
+        echo '.select' $RNC
+        echo 'avcburst:id=12, num_events=1, freq=6, mode=persistent, idle_time=0, avcdata = "[{\"ManagedElement=1\",[{\"userLabel\",\"bravo1\"}]},{\"ManagedElement=1\",[{\"userLabel\",\"bravo2\"}]}]", loop=true;'
+        echo  'showbursts:id=12;'
+ done

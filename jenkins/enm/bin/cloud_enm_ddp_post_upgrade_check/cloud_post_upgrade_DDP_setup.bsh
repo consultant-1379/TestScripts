@@ -1,0 +1,231 @@
+#!/bin/bash
+# ********************************************************************
+# Name    : cloud_post_upgrade_DDP_setup.bsh
+# Date    : 26/04/2018
+# Revision: B
+# Purpose : Once a cloud upgrade has completed, run post steps to re-setup DDP
+#
+# Usage   : cloud_post_upgrade_DDP_setup.bsh
+#
+# 19/04/18 Rev A: Original Version
+# 26/04/18 Rev B: Change logging to log to /var/log/messages
+# ********************************************************************
+
+AWK=/bin/awk
+CAT=/bin/cat
+ECHO=/bin/echo
+GREP=/bin/grep
+LOGGER=/bin/logger
+NSLOOKUP=/usr/bin/nslookup
+PING=/bin/ping
+SCP=/usr/bin/scp
+SED=/bin/sed
+SSH=/usr/bin/ssh
+TAIL=/usr/bin/tail
+TEE=/usr/bin/tee
+
+# Sourcing bashrc file
+. ~/.bashrc
+
+EMP_KEY=/var/tmp/enm_keypair.pem
+SSH_ESMON="$SSH -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@$ESMON"
+TAG="Cloud_post_UPG_DDP_setup"
+
+#======================================================
+
+###########################
+###     Functions       ###
+###########################
+
+checking_if_post_upgrade_setup_is_needed()
+{
+# Checking if this post upgrade script needs to be run, checking for flag.
+$SSH_ESMON 'sudo -i cat /ericsson/.post_upgrade_script_flag &> /dev/null'
+if [ $? -eq 0 ]
+	then
+		$ECHO "=> Exiting this script, as flag /ericsson/.post_upgrade_script_flag is already present on the esmon VM"
+		$LOGGER INFO "${TAG}" "Exiting this script, as flag /ericsson/.post_upgrade_script_flag is already present on the esmon VM"
+		exit 0
+	else
+		$ECHO "=> Running this script as can't find flag /ericsson/.post_upgrade_script_flag on the esmon VM"
+		$LOGGER INFO "${TAG}" "Running this script as can't find flag /ericsson/.post_upgrade_script_flag on the esmon VM"
+		$ECHO "===> Creating new flag on esmon now"
+		$LOGGER INFO "${TAG}" "Creating new flag on esmon now"
+		$SSH_ESMON 'sudo -i /bin/touch /ericsson/.post_upgrade_script_flag'
+	fi
+}
+
+###########################
+
+setup_ssh_keys(){
+
+esmon_name=`$SSH_ESMON '/usr/bin/consul members | grep esmon' | awk {'print $1'}`
+
+#Removing old key of previous esmon VM from WORKLOAD VM
+$SED -i "/$esmon_name/d" /root/.ssh/authorized_keys
+
+# Setting up ssh key on esmon
+$ECHO "===> Creating ssh key, with no password, on esmon"
+$LOGGER INFO "${TAG}" "Creating ssh key, with no password, on esmon"
+$SSH -i /var/tmp/enm_keypair.pem -o StrictHostKeyChecking=no cloud-user@$ESMON 'sudo ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa'
+
+# Setting up passwordless access from ESMON to WORKLOAD VM
+$ECHO "===> Setting up passwordless access from ESMON to WORKLOAD VM"
+$LOGGER INFO "${TAG}" "Setting up passwordless access from ESMON to WORKLOAD VM"
+
+# Adding new esmon key to WORKLOAD VM
+$SSH_ESMON 'sudo -i cat /root/.ssh/id_rsa.pub' > /tmp/esmon_key
+$CAT /tmp/esmon_key >> /root/.ssh/authorized_keys
+
+}
+
+###########################
+
+setup_ssh_keys_from_esmon_to_netsims(){
+
+$ECHO "===> Copying esmon key to all netsim boxes"
+$LOGGER INFO "${TAG}" "Copying esmon key to all netsim boxes"
+for i in $( eval echo {01..$number_of_netsims}); do echo "$netsim_name-$i"; $SCP -o StrictHostKeyChecking=no /tmp/esmon_key root@$netsim_name-$i.athtem.eei.ericsson.se:/tmp/esmon.pubkey; done
+$ECHO "===> Removing old esmon keys from netsim boxes"
+$LOGGER INFO "${TAG}" "Removing old esmon keys from netsim boxes"
+for i in $( eval echo {01..$number_of_netsims}); do echo "$netsim_name-$i"; $SSH -o StrictHostKeyChecking=no root@$netsim_name-$i.athtem.eei.ericsson.se "/bin/sed -i '/$esmon_name/d' /root/.ssh/authorized_keys"; done
+$ECHO "===> Read keys into netsim authorized_keys file"
+$LOGGER INFO "${TAG}" "Read keys into netsim authorized_keys file"
+for i in $( eval echo {01..$number_of_netsims}); do echo "$netsim_name-$i"; $SSH -o StrictHostKeyChecking=no root@$netsim_name-$i.athtem.eei.ericsson.se 'cat /tmp/esmon.pubkey >> /root/.ssh/authorized_keys'; done
+
+}
+
+###########################
+
+setting_up_crontab_for_ddp_on_esmon(){
+$ECHO "=> Creating enmutils directory on esmon"
+$LOGGER INFO "${TAG}" "Creating enmutils directory on esmon"
+$SSH_ESMON 'sudo -i /bin/mkdir /var/log/enmutils/'
+$ECHO "===> Adding entry to root crontab to copy files from workload VM to esmon for DDP setup"
+$LOGGER INFO "${TAG}" "Adding entry to root crontab to copy files from workload VM to esmon for DDP setup"
+WORKLOAD_VM_NAME=`uname -n`.athtem.eei.ericsson.se
+$SSH_ESMON "sudo -i /bin/echo '*/30 * * * * scp root@"$WORKLOAD_VM_NAME":/var/log/enmutils/profiles.log /var/log/enmutils/profiles.log' | sudo tee --append /var/spool/cron/root"
+
+}
+
+###########################
+
+setup_ssh_to_external_nfs(){
+
+$ECHO "=> Push esmon ssh key to external NFS nodes and read into authorized_keys on the externals NFS nodes"
+$LOGGER INFO "${TAG}" "Push esmon ssh key to external NFS nodes and read into authorized_keys on the externals NFS nodes"
+$SCP -o StrictHostKeyChecking=no /tmp/esmon_key root@$external_nfs_ip_1:/tmp/esmon.pubkey
+$SCP -o StrictHostKeyChecking=no /tmp/esmon_key root@$external_nfs_ip_2:/tmp/esmon.pubkey
+
+# Removing old esmon VM keys from external NFS nodes
+$SSH -o StrictHostKeyChecking=no root@$external_nfs_ip_1 "/bin/sed -i '/$esmon_name/d' /root/.ssh/authorized_keys"
+$SSH -o StrictHostKeyChecking=no root@$external_nfs_ip_2 "/bin/sed -i '/$esmon_name/d' /root/.ssh/authorized_keys"
+
+# Adding new esmon keys to external NFS nodes
+$SSH -o StrictHostKeyChecking=no root@$external_nfs_ip_1 'cat /tmp/esmon.pubkey >> /root/.ssh/authorized_keys'
+$SSH -o StrictHostKeyChecking=no root@$external_nfs_ip_2 'cat /tmp/esmon.pubkey >> /root/.ssh/authorized_keys'
+
+}
+
+###########################
+
+setup_ssh_to_vnx(){
+$ECHO "=> Running setup to be able to collect information for VNX"
+$LOGGER INFO "${TAG}" "Running setup to be able to collect information for VNX"
+$SSH_ESMON 'sudo -i /bin/touch /var/ericsson/ddc_data/config/MONITOR_CLARIION'
+$SSH_ESMON 'sudo -i wget -P /tmp "https://arm1s11-eiffel004.eiffel.gic.ericsson.se:8443/nexus/service/local/repositories/litp_thirdparty/content/com/emc/navisphere/navicli/7.33.1.0.33/navicli-7.33.1.0.33.rpm"'
+$SSH_ESMON 'sudo -i yum install -y /tmp/navicli-7.33.1.0.33.rpm'
+$SSH_ESMON 'sudo -i mkdir -p /ericsson/storage/san/plugins/vnx/cred'
+$SSH_ESMON 'sudo -i /opt/Navisphere/bin/naviseccli -AddUserSecurity -Scope 0 -password beter00t -User bete -secfilepath /ericsson/storage/san/plugins/vnx/cred'
+$SSH_ESMON 'sudo -i mkdir -p  /etc/Navisphere/'
+$SSH_ESMON "sudo -i echo "user system@$vnx_spa_ip" | sudo tee --append  /etc/Navisphere/agent.config"
+
+$ECHO "===> Restarting DDC service on esmon"
+$LOGGER INFO "${TAG}" "Restarting DDC service on esmon"
+$SSH_ESMON 'sudo -i service ddc restart'
+
+}
+
+###########################
+
+#################################################################
+######                     MAIN                           #######
+#################################################################
+
+# Help menu
+if [ "$1" = "-h" -o "$1" = "--h" -o "$1" = "-help" -o "$1" = "--help" ]
+then
+        # Help output to be printed if any of the following are entered: -h, --h, -help or --help
+        $ECHO ""
+        $ECHO "Once a cloud upgrade has completed, run post steps from the workload VM to re-setup DDP"
+        $ECHO ""
+        $ECHO "Stuff script needs:"
+        $ECHO "enm_key on worklaod vm - /var/tmp/enm_keypair.pem"
+        $ECHO "Entry in workload bashrc for ESMON external IP address; export ESMON= <external esmon IP>"
+        $ECHO "ssh key on workload VM: /root/.ssh/id_rsa.pub"
+        $ECHO "passwordless access from workload vm (root) to netsim boxes (root)"
+        $ECHO "passwordless access from workload vm (root) to external NFS nodes (root)"
+        $ECHO "Have to enter deployment information into script_config.txt"
+        $ECHO ""
+        exit
+fi
+
+
+location=`dirname "$0"`
+
+# Checking is config file exists
+if [ ! -f $location/script_config.txt ]
+then
+	$ECHO "=> No script_config.txt file found. Exiting!"
+	$LOGGER INFO "${TAG}" "No script_config.txt file found. Exiting!"
+	exit
+fi
+
+# Checking if there is an entry for ESMON in the .bashrc file
+$CAT ~/.bashrc | $GREP ESMON
+if [ $? -ne 0 ]
+then
+	$ECHO "=> No enrty for variable ESMON in .bashrc file. Exiting!"
+	$LOGGER INFO "${TAG}" "No enrty for variable ESMON in .bashrc file. Exiting!"
+	exit
+fi
+
+# Checking if ESMON VM is alive
+$PING -c 4 $ESMON
+if [ $? -ne 0 ]
+then
+	$ECHO "=> ESMON VM is not reachable. Exiting!"
+	$LOGGER INFO "${TAG}" "ESMON VM is not reachable. Exiting!"
+	exit
+fi
+
+
+netsim_name=`cat $location/script_config.txt | grep netsim_name| awk -F "=" {'print $2'}`
+number_of_netsims=`cat $location/script_config.txt | grep number_of_netsims | awk -F "=" {'print $2'}`
+external_nfs_ip_1=`cat $location/script_config.txt | grep external_nfs_ip_1| awk -F "=" {'print $2'}`
+external_nfs_ip_2=`cat $location/script_config.txt | grep external_nfs_ip_2| awk -F "=" {'print $2'}`
+vnx_spa_ip=`cat $location/script_config.txt | grep vnx_spa_ip| awk -F "=" {'print $2'}`
+
+$ECHO ""
+$ECHO "Using netsim: " $netsim_name
+$ECHO "Number of netsims entered: "$number_of_netsims
+$ECHO "NFS1 " $external_nfs_ip_1
+$ECHO "NFS2 " $external_nfs_ip_2
+$ECHO "VNX IP " $vnx_spa_ip
+$ECHO ""
+$ECHO ""
+
+
+checking_if_post_upgrade_setup_is_needed
+# Setup DDC collection across all netsims and workload VM
+setup_ssh_keys
+setup_ssh_keys_from_esmon_to_netsims
+setting_up_crontab_for_ddp_on_esmon
+# Setup DDC collection for external nfs
+setup_ssh_to_external_nfs
+# Setup DDC collection for VNX
+setup_ssh_to_vnx
+
+$ECHO "=> Script completed"
+$LOGGER INFO "${TAG}" "Script completed"
+

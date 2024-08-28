@@ -1,0 +1,455 @@
+##############################################
+## Script: STKPI Results Check script      ###
+## Author: rajesh.chiluveru2@ericsson.com  ###
+## Last Updated :06-Dec-2017               ###
+##############################################
+
+
+DisplayMenuKpi()
+{
+echo
+echo -e "\e[0;32m Select the OPTION for STKPI: \e[0m"
+        echo
+        echo "            1. ST_STKPI_CM_Synch_01 for one ERBS node type"
+        echo "            2. ST_STKPI_CM_Synch_02 for one SGSN-MME node type"
+        echo "            3. ST_STKPI_CM_CHANGE time takes to Change one attribute on an existing MO for all LTE nodes"
+        echo "            4. ST_STKPI_CM_Export_01 LTE RAN Network export MO/sec rate "
+        echo "            5. ST_STKPI_CM_Import_01 5000 MOs large Non live config Import rate"
+        echo "            6. ST_STKPI_PM_01 Avg ROP duration for 24 hrs PM file collection"
+        echo "            0. Exit"
+        echo
+        echo -e "\e[0;32m Enter your choice: \e[0m"
+}
+mkdir -p /tmp/erahchu_scripts
+svm=/root/rvb/bin/ssh_to_vm_and_su_root.exp
+KEYPAIR=/var/tmp/enm_keypair.pem
+
+ST_STKPI_CM_Synch_01()
+{
+if [ "$1" != "ALL" ]
+then
+    echo -n "Enter Node Name [LTE41ERBS00090]: "
+    read N_NAME
+       if [ -z ${N_NAME} ]
+       then
+       printf "CHECKING for default node "
+       echo -e "\e[0;34m  LTE41ERBS00090... \e[0m"
+       N_NAME=LTE41ERBS00090
+       M_cnt=2847
+       else
+       rm -f /tmp/erahchu_scripts/MO_Count_*.txt
+       H_name=`hostname`
+       echo ${H_name}|grep wlvm > /dev/null
+
+           if [ $? -eq 0 ]
+           then
+           vm_list=`ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} 'consul members|grep -w mscm|cut -d" " -f1'`
+                 for ser_vm in ${vm_list}
+                 do
+                    if [ -z ${M_cnt} ]
+                    then
+ssh -q -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${ser_vm} 'grep SYNC_NODE.TOPOLOGY_SYNC, /ericsson/3pp/jboss/standalone/log/server.log|grep ${N_NAME}'" > /tmp/erahchu_scripts/MO_Count_${N_NAME}.txt
+                    M_cnt=`cat /tmp/erahchu_scripts/MO_Count_${N_NAME}.txt|sed  -n 's/.*(Total MOs: \([[:digit:]]*\+\).*/\1/p'|sort -u`
+                    fi
+                 done
+           else
+           vm_list=`cat /etc/hosts|grep -w mscm|cut -d" " -f1'`
+                 for ser_vm in ${vm_list}
+                 do
+                   if [ -z ${M_cnt} ]
+                   then
+$svm ${ser_vm} "cat /ericsson/3pp/jboss/standalone/log/server.log*|grep 'MOs read prior to sync'|grep ${N_NAME}" > /tmp/erahchu_scripts/MO_Count_${N_NAME}.txt
+                   M_cnt=`cat /tmp/erahchu_scripts/MO_Count_${N_NAME}.txt|sed  -n 's/.*(Total MOs: \([[:digit:]]*\+\).*/\1/p'|sort -u`
+                   fi
+                 done
+           fi
+       fi
+if [ -z ${M_cnt} ]
+then
+echo " Total MO count is not found for Node:${N_NAME} from current logs.."
+echo
+else
+echo -e " Total MO on ${N_NAME} == \e[0;34m  ${M_cnt} \e[0m"
+echo
+fi
+
+else
+N_NAME=LTE41ERBS00090
+M_cnt=2847
+fi
+
+if [ "$1" != "ALL" ]
+then
+if [  -z $M_cnt ]
+then
+echo " Total MO count for ${N_NAME} is not Found from JBOSS Logs"
+echo " Enter Total MOs for ${N_NAME}, it Should NOT be null "
+read M_cnt
+fi
+fi
+
+rm -f /tmp/erahchu_scripts/time_${N_NAME}.txt
+
+       H_name=`hostname`
+       echo ${H_name}|grep wlvm > /dev/null
+
+           if [ $? -eq 0 ]
+           then
+           vm_list=`ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} 'consul members|grep -w mscm|cut -d" " -f1'`
+                 for ser_vm in ${vm_list}
+                 do
+ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${ser_vm} 'grep SYNC_NODE.ATTRIBUTE /ericsson/3pp/jboss/standalone/log/server.log|grep COMPLETE|grep ${N_NAME}'" >> /tmp/erahchu_scripts/time_${N_NAME}.txt
+cat /tmp/erahchu_scripts/time_${N_NAME}.txt|grep ^[0-9][0-9][0-9][0-9]|sort -k 1 -M > /tmp/erahchu_scripts/time_${N_NAME}_2.txt 2>/dev/null
+                 done
+###############
+   if [ ! -s /tmp/erahchu_scripts/time_${N_NAME}_2.txt ]
+   then
+   echo "Enter Custer Name, eg: LMI_ENM434 or LMI_vENM001 etc.: "
+   read Cname
+   echo
+   echo "Enter date in ddmmyy format : "
+   read Dname
+   echo
+   echo "Checking from DDP logs...."
+   echo
+zgrep mscm /net/ddpenm2/data/stats/tor/${Cname}/analysis/${Dname}/enmlogs/*.csv.gz|grep SYNC_NODE.ATTRIBUTE|grep COMPLETE|grep ${N_NAME} > /tmp/erahchu_scripts/time_${N_NAME}.txt
+   cat /tmp/erahchu_scripts/time_${N_NAME}.txt|cut -d"z" -f2 > /tmp/erahchu_scripts/time_${N_NAME}_21.txt 2>/dev/null
+   fi
+echo "----------------------------------"
+echo -e "\e[0;33m ST_STKPI_CM_Synch_01 \e[0;32m Expected Result : 134 MOs/sec or Higher  \e[0m \e[0m"
+echo "----------------------------------"
+
+
+       if [ -f /tmp/erahchu_scripts/time_${N_NAME}_21.txt ]
+       then
+        while read line
+        do
+                Time_took=`echo "$line" |cut -d" " -f1,2,18,19,20,21|sed  -n 's/.* took \[\([[:digit:]]*\+\).*/\1/p'`
+                res_=`echo "scale=5;(${M_cnt}/${Time_took})*1000"|bc`
+                DT=`echo "$line" |cut -c2-17`
+                LINE=`echo "$line"|sed  -n 's/.*NetworkElement=\(.*\),CmFunction=1.* \(took.*]\) ms to execute.*/\1 \2ms/p'`
+                printf "$DT $LINE  Total Mo :${M_cnt}"
+                echo -e "\e[0;34m  STKPI :: ${res_} MO/second \e[0m"
+        done < /tmp/erahchu_scripts/time_${N_NAME}_21.txt
+    rm -f /tmp/erahchu_scripts/time_*.txt
+     rm -f /tmp/erahchu_scripts/MO_Count_*.txt
+       fi
+
+#############
+
+
+           else
+           vm_list=`cat /etc/hosts|grep -w mscm|cut -d" " -f1'`
+                 for ser_vm in ${vm_list}
+                 do
+$svm ${ser_vm} "cat /ericsson/3pp/jboss/standalone/log/server.log*|grep 'SYNC_NODE.ATTRIBUTE'|grep 'DPS Database, COMPLETE SYNC'|grep ${N_NAME}" >> /tmp/erahchu_scripts/time_${N_NAME}.txt
+                 done
+           fi
+if [ -s /tmp/erahchu_scripts/time_${N_NAME}.txt ]
+then
+cat /tmp/erahchu_scripts/time_${N_NAME}.txt|grep ^[0-9][0-9][0-9][0-9]|sort -k 1 -M > /tmp/erahchu_scripts/time_${N_NAME}_2.txt 2>/dev/null
+fi
+
+if [ -s /tmp/erahchu_scripts/time_${N_NAME}_2.txt ]
+then
+        while read line
+        do
+                Time_took=`echo "$line" |cut -d" " -f1,2,18,19,20,21|sed  -n 's/.* took \[\([[:digit:]]*\+\).*/\1/p'`
+                res_=`echo "scale=5;(${M_cnt}/${Time_took})*1000"|bc`
+                LINE=`echo "$line"|cut -d" " -f1,2,18,19,20,21|sed  -n 's/\([[:digit:]]*\+\),.*=\(.*\),.*) \(took.*]\).*/\1  \2  \3ms/p'`
+                printf "$LINE  Total Mo :${M_cnt}"
+                echo -e "\e[0;34m  STKPI :: ${res_} MO/second \e[0m"
+        done < /tmp/erahchu_scripts/time_${N_NAME}_2.txt
+rm -f /tmp/erahchu_scripts/time_*.txt
+rm -f /tmp/erahchu_scripts/MO_Count_*.txt
+echo
+fi
+}
+
+
+ST_STKPI_CM_Synch_02()
+{
+
+if [ "$1" != "ALL" ]
+then
+echo -n "Enter Node Name [CORE01SGSN001]: "
+read N_NAME
+if [ -z ${N_NAME} ]
+then
+printf "CHECKING for default node "
+echo -e "\e[0;34m CORE01SGSN001 ... \e[0m"
+N_NAME="CORE01SGSN001"
+fi
+else
+N_NAME="CORE01SGSN001"
+fi
+echo
+echo "---------------------------------"
+echo -e "\e[0;33m ST_STKPI_CM_Synch_02 \e[0;32m Expected Result : 400 MOs/sec or Higher  \e[0m \e[0m"
+echo "---------------------------------"
+rm -f /tmp/erahchu_scripts/2nd_KPI_op.txt
+
+H_name=`hostname`
+echo ${H_name}|grep wlvm > /dev/null
+if [ $? -eq 0 ]
+then
+ vm_list=`ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} 'consul members|grep -w mscmce|cut -d" " -f1'`
+ for ser_vm in ${vm_list}
+ do
+ ssh -q -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${ser_vm} 'grep ${N_NAME} /ericsson/3pp/jboss/standalone/log/server.log|grep COM_ECIM_SYNC_NODE.FINALIZESYNCHANDLER_COMPLETE_SYNC'" >> /tmp/erahchu_scripts/2nd_KPI_op.txt
+ done
+else
+ for ser_vm in `cat /etc/hosts|grep mscmce|awk '{print $2}'|tr -s "\n" " "`
+ do
+ $svm ${ser_vm} "cat /ericsson/3pp/jboss/standalone/log/server.log*|grep "${N_NAME}"|grep "COM_ECIM_SYNC_NODE.FINALIZESYNCHANDLER_COMPLETE_SYNC"" >> /tmp/erahchu_scripts/2nd_KPI_op.txt
+ done
+fi
+cat /tmp/erahchu_scripts/2nd_KPI_op.txt|grep ^[0-9][0-9][0-9][0-9]|sort -k 1 -M |tail -20 > /tmp/erahchu_scripts/2nd_KPI_op_2.txt 2>/dev/null
+cat /tmp/erahchu_scripts/2nd_KPI_op_2.txt|sed -n 's/\([0-9]*\) \([0-9][0-9]:[0-9][0-9]\):.*FDN=\(.*\),CmFunction.*,Total Time(ms)=\([0-9]*\+\).*,Number of ManagedObjects Parsed=\([0-9]*\+\).*/\1 \2 \3 MO_Parsed:\5 Time_took:\4/p'|sort -k 1 -M|tail -10 > /tmp/erahchu_scripts/2nd_KPI_op_3.txt 2>/dev/null
+
+if [ -s /tmp/erahchu_scripts/2nd_KPI_op_3.txt ]
+then
+        while read line
+        do
+        n2=`echo "$line"|awk '{print $4}'|cut -d":" -f2`
+        d2=`echo "$line"|awk '{print $5}'|cut -d":" -f2`
+        r2=`echo "scale=5;(${n2}/${d2})*1000"|bc`
+        printf "$line  "
+        echo -e "\e[0;34m  STKPI :: ${r2} MO/second \e[0m"
+        done < /tmp/erahchu_scripts/2nd_KPI_op_3.txt
+fi
+}
+STKPI_CM_Change_01()
+{
+echo
+echo "--------------------------------"
+echo -e "\e[0;33m STKPI_CM_Change_01 \e[0;32m  Expected Result : 50 Nodes/sec or Higher  \e[0m \e[0m"
+echo "--------------------------------"
+cat /ericsson/enm/dumps/KPI_LOGFILES/*.log|grep Takes|awk '{print "Time:"$14" "$15" "$16" "$17" "$11": "$10" Time Taken: "$3}' > /tmp/erahchu_scripts/3rd_KPI_op.txt
+zcat /ericsson/enm/dumps/KPI_LOGFILES/*.log.gz|grep Takes|awk '{print "Time:"$14" "$15" "$16" "$17" "$11": "$10" Time Taken: "$3}' >> /tmp/erahchu_scripts/3rd_KPI_op.txt
+cat /tmp/erahchu_scripts/3rd_KPI_op.txt|tail -10 > /tmp/erahchu_scripts/3rd_KPI_op2.txt
+if [ -f /tmp/erahchu_scripts/3rd_KPI_op2.txt ]
+then
+        while read line
+        do
+        n3=`echo "$line"|awk '{print $6}'`
+        d3=`echo "$line"|awk '{print $NF}'|tr -s "hms" " "|awk -F"." '{print (($2 * 60) + $3)}'`
+        r3=`echo "${n3}/${d3}"|bc`
+        LINE="$line"
+        printf "$LINE  "
+        echo -e "\e[0;34m  STKPI :: ${r3} Nodes/second \e[0m"
+        done < /tmp/erahchu_scripts/3rd_KPI_op2.txt
+fi
+echo
+}
+
+ST_STKPI_CM_Export_01()
+{
+echo "----------------------------------"
+echo -e "\e[0;33m ST_STKPI_CM_Export_01 \e[0;32m Expected Result : 7900 MOs/sec or Higher  \e[0m  \e[0m"
+echo "----------------------------------"
+H_name=`hostname`
+echo ${H_name}|grep wlvm > /dev/null
+if [ $? -eq 0 ]
+   then
+   vm_list=`ssh -i ${KEYPAIR} cloud-user@${EMP} 'consul members|grep -w impexp|cut -d" " -f1'`
+   for ser_vm in ${vm_list}
+   do
+ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${ser_vm} 'grep EXPORT_SERVICE.COMPLETED /ericsson/3pp/jboss/standalone/log/server.log*|grep T06-00'" > /tmp/erahchu_scripts/4th_KPI_op.txt
+   cat /tmp/erahchu_scripts/4th_KPI_op.txt|grep ^[0-9][0-9][0-9][0-9] > /tmp/erahchu_scripts/4th_KPI_op_2.txt 2>/dev/null
+   done
+else
+   vm_list=`cat /etc/hosts|grep impexp|awk '{print $2}'|tr -s "\n" " "`
+   for ser_vm in `cat /etc/hosts|grep impexp|awk '{print $2}'|tr -s "\n" " "`
+   do
+$svm ${ser_vm} 'cat /ericsson/3pp/jboss/standalone/log/server.log*|grep "dministrator, EXPORT_SERVICE.COMPLETED"|grep "T06-00"' > /tmp/erahchu_scripts/4th_KPI_op.txt
+   cat /tmp/erahchu_scripts/4th_KPI_op.txt|grep ^[0-9][0-9][0-9][0-9] > /tmp/erahchu_scripts/4th_KPI_op_2.txt
+   done
+fi
+
+if [ -s /tmp/erahchu_scripts/4th_KPI_op_2.txt ]
+then
+        while read line
+        do
+        LINE=`echo "$line"|cut -d, -f8,9,11,12,13,16,17|tr -s "," " "|tr -s "=" " "|awk '{print $4" STATUS:"$2" TIME_TOOK:"$6"sec "$7"_"$8" NODES:"$10"/"$12" MOs:"$14 }'`
+        LINE_1=`echo "$line"|cut -d, -f8,9,11,12,13,16,17|tr -s "," " "|tr -s "=" " "`
+        n4=`echo "$LINE_1"|awk '{print $14}'`
+        d4=`echo "$LINE_1"|awk '{print $6}'`
+        r4=`echo "scale=5;(${n4}/${d4})"|bc`
+        printf "$LINE  "
+        echo -e "\e[0;34m  STKPI :: ${r4} MO/second \e[0m"
+        done < /tmp/erahchu_scripts/4th_KPI_op_2.txt
+fi
+echo
+}
+
+ST_STKPI_CM_Import_01()
+{
+echo
+echo "----------------------------------"
+echo -e "\e[0;33m ST_STKPI_CM_Import_01 \e[0;32m Expected Result : 28 MOs/sec or Higher  \e[0m \e[0m"
+echo "----------------------------------"
+rm -f /tmp/erahchu_scripts/5th_KPI_op.txt
+H_name=`hostname`
+echo ${H_name}|grep wlvm > /dev/null
+if [ $? -eq 0 ]
+   then
+   vm_list=`ssh -i ${KEYPAIR} cloud-user@${EMP} 'consul members|grep -w impexp|cut -d" " -f1'`
+   for ser_vm in ${vm_list}
+   do
+ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${ser_vm} 'grep Configuration=cm_import_05 /ericsson/3pp/jboss/standalone/log/server.log*'" > /tmp/erahchu_scripts/5th_KPI_op.txt
+   done
+
+else
+   vm_list=`cat /etc/hosts|grep impexp|awk '{print $2}'|tr -s "\n" " "`
+   for ser_vm in ${vm_list}
+   do
+$svm ${ser_vm} 'cat /ericsson/3pp/jboss/standalone/log/server.log*|grep "Configuration=cm_import_05"' >> /tmp/erahchu_scripts/5th_KPI_op.txt
+  done
+fi
+
+if [ -f /tmp/erahchu_scripts/5th_KPI_op.txt ]
+then
+cat /tmp/erahchu_scripts/5th_KPI_op.txt|grep ^[0-9][0-9][0-9][0-9]|sort -k 1 -M |tail -10 > /tmp/erahchu_scripts/5th_KPI_op_2.txt
+else
+echo " NO cm_import_05 details found from jboss logs"
+fi
+
+if [ -f /tmp/erahchu_scripts/5th_KPI_op_2.txt ]
+then
+while read line
+do
+Dt=`echo "$line"|cut -d, -f8,10,11,12,16|tr -s "," " "|tr -s "=" " "|awk '{print $3"_"$4}'|sed 's/....$//g'`
+LINE=`echo "$line"|cut -d, -f8,10,11,12,16|tr -s "," " "|tr -s "=" " "|awk '{print "STATUS:"$11" TIME_TOOK:"$9"sec  "$14" TOTAL_MOs:"$17}'`
+n5=`echo "$line"|cut -d, -f8,10,11,12,16|tr -s "," " "|tr -s "=" " "|awk '{print $17}'`
+d5=`echo "$line"|cut -d, -f8,10,11,12,16|tr -s "," " "|tr -s "=" " "|awk '{print $9}'`
+r5=`echo "scale=5;(${n5}/${d5})"|bc`
+printf " $Dt $LINE  "
+echo -e "\e[0;34m  STKPI :: ${r5} MO/second \e[0m"
+done < /tmp/erahchu_scripts/5th_KPI_op_2.txt
+fi
+echo
+}
+
+ST_STKPI_PM_01()
+{
+echo
+echo "----------------------------------"
+echo -e "\e[0;33m ST_STKPI_PM_01 \e[0;32m Expected Result : for 96 ROPs,Avg ROP duration less than 900 sec  \e[0m \e[0m"
+echo "----------------------------------"
+
+if [ -s /ericsson/enm/dumps/erahchu_dump_pm_kpi.txt ]
+then
+ for i in `cat /ericsson/enm/dumps/erahchu_dump_pm_kpi.txt|awk '{print $2}'|sort -u`
+ do
+ n1=`grep -c $i /ericsson/enm/dumps/erahchu_dump_pm_kpi.txt`
+ N1=`echo "$n1/2"|bc`
+ N2=`cat /ericsson/enm/dumps/erahchu_dump_pm_kpi.txt|grep $i|awk '{ sum += $5 } END { print sum }'`
+ N3=`cat /ericsson/enm/dumps/erahchu_dump_pm_kpi.txt|grep $i|awk '{ sum += $7 } END { print sum }'`
+ N4=`cat /ericsson/enm/dumps/erahchu_dump_pm_kpi.txt|grep $i|awk '{ sum += $9 } END { print sum }'`
+ N5=`echo "$N4 / $n1"|bc`
+
+ echo -e "Date: \e[0;33m $i \e[0m Total_ROPs_collected: \e[0;33m $N1/96 \e[0m Total_files_collected: \e[0;33m $N2 \e[0m  Total_files_failed: \e[0;31m $N3 \e[0m \e[0;34m STKPI:: $N5 seconds \e[0m"
+ done
+else
+ echo " NO results found.Looks like this is First time run on this server.."
+ echo
+ echo -e "\e[0;33m Configuring PM cron job as shown below \e[0m . Re-execute STKPI script to fetch Results..."
+ echo
+ echo "0 4 * * * root /root/rvb/bin/pm_kpi.sh <Cluster ID> <DDP_server_name>"
+ echo
+ touch /etc/cron.d/stkpi_PM_01
+ chmod 775 /etc/cron.d/stkpi_PM_01
+echo
+  echo " Enter Cluster ID.. Eg: ENM434 or vENM001 or vENM009 .. "
+  read C_id
+  echo " Enter DDP server name on which ${C_id} is present Eg: ddpi OR ddpenm2 OR ddpenm4 etc..."
+  read ser_ddp
+  echo
+df -h |grep ddp > /dev/null
+  if [ $? -ne 0 ]
+  then
+  echo
+  echo " ERROR :: ddp mount point is missing. Mounting based on Below inputs... "
+  echo
+  echo " Cluster ID: ${C_id} "
+  echo " DDP server: ${ser_ddp}"
+  echo
+  echo " Mounting DDP on this Server .."
+  mount ${ser_ddp}:/data/stats /net/${ser_ddp}/data/stats
+  echo " Mounting is Done.."
+  fi
+
+echo
+echo "0 4 * * * root /root/rvb/bin/pm_kpi.sh LMI_${C_id} ${ser_ddp}" > /etc/cron.d/stkpi_PM_01
+echo
+echo -e "\e[0;33m Configured \e[0m ...OK.  Re-execute this script to fetch Previous days DATA. "
+cat /etc/cron.d/stkpi_PM_01
+echo
+echo -e "\e[0;33m Fetching PMIC statistics for last 7 days from DDP logs...\e[0m Plz wait !!"
+
+for i in 1 2 3 4 5 6 7
+do
+da1=`date  --date="${i} days ago" +%d%m%y`
+zgrep fifteenMinuteRopFileCollectionCycle /net/${ser_ddp}/data/stats/tor/LMI_${C_id}/analysis/${da1}/enmlogs/*.csv.gz >> /ericsson/enm/dumps/erahchu_dump_pm_kpi1.txt
+echo " Done for ${da1}.."
+done
+rm -f /ericsson/enm/dumps/erahchu_dump_pm_kpi.txt
+while read line
+do
+u1=`echo "$line"|sed -n 's/.*,ropStartTimeIdentifier=\([[:digit:]]*\+\),.*/\1/p'|cut -c1-10`
+u2=`echo "$line"|sed -n 's/.*,ropStartTime=\([[:digit:]]*\+\),.*/\1/p'`
+u3=`echo "$line"|sed -n 's/.*,ropEndTime=\([[:digit:]]*\+\)]/\1/p'`
+n1=`echo "$line"|sed -n 's/.*,numberOfFilesCollected=\([[:digit:]]*\+\),.*/\1/p'`
+n2=`echo "$line"|sed -n 's/.*,numberOfFilesFailed=\([[:digit:]]*\+\),.*/\1/p'`
+U1=`date -d @${u1} "+%Y-%m-%d %H:%M"`
+U2=`expr ${u3} - ${u2}`
+U3=`echo "${U2}/1000"|bc`
+
+echo -e "ROP_START_TIME: ${U1}  Files_collected: ${n1}  Files_Failed: ${n2}     STKPI: ${U3}" >> /ericsson/enm/dumps/erahchu_dump_pm_kpi.txt
+done < /ericsson/enm/dumps/erahchu_dump_pm_kpi1.txt
+fi
+}
+
+
+if [ ! -z $1 ]
+then
+if [ "$1" == "ALL" ]
+then
+echo
+echo -e "\e[0;32m ========= CHECKING RESULTS FOR ALL STKPI ======= \e[0m"
+ST_STKPI_CM_Synch_01 ALL
+ST_STKPI_CM_Synch_02 ALL
+STKPI_CM_Change_01
+ST_STKPI_CM_Export_01
+ST_STKPI_CM_Import_01
+ST_STKPI_PM_01
+fi
+else
+option=-1
+fi
+
+while [ "$option" != 0 -a "$1" != "ALL" ]
+do
+        DisplayMenuKpi
+        read option
+        case $option in
+
+                1)
+                   ST_STKPI_CM_Synch_01;;
+                2)
+                   ST_STKPI_CM_Synch_02;;
+                3)
+                   STKPI_CM_Change_01;;
+                4)
+                   ST_STKPI_CM_Export_01;;
+                5)
+                   ST_STKPI_CM_Import_01;;
+                6)
+                   ST_STKPI_PM_01;;
+                *) ;;
+
+
+        esac
+done
+rm -f /tmp/erahchu_scripts/*KPI*.txt

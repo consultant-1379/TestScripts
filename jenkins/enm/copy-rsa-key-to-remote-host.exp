@@ -1,0 +1,100 @@
+#!/usr/bin/expect 
+
+set sourcedScript [ info script ]
+set hostname [lindex $argv 0]
+set user [lindex $argv 1]
+set password [lindex $argv 2]
+
+if  { $argc < 2 } {
+        puts "Sets up passwordless access to remote machine (e.g. root access to ENM svc; root/netsim access to netsim box)"
+        puts "Syntax: $sourcedScript hostname user"
+        exit 0
+}
+
+set timeout 15
+
+# If password is not submitted, then use default one:
+if { [string match "$password" ""] } {
+
+        # This script allows for either ENM svc or netsim key copying - need to cater for the different passwords for either one
+        if { [regexp ".*netsim.*" $hostname match] } {
+            # assume that hostname is a netsim box, cause it has netsim in the name:
+            if {  [string match "$user" "root"]} {
+                # thus use the following 'standard' root password for netsim:
+                set password "shroot"
+            }
+            if {  [string match "$user" "netsim"]} {
+                # thus use the following 'standard' netsim password for netsim:
+                set password "netsim"
+            }
+        } else {
+            # this is not foolproof, but ...
+            if {  [string match "$user" "root"]} {
+                # assume the following root password:
+                set password "passw0rd"
+            }
+            if {  [string match "$user" "litp-admin"]} {
+                # assume the following root password:
+                set password "12shroot"
+            }
+        }
+}
+
+# If ssh key has not already been generated, then generate a new one
+set RSA_FILE "$::env(HOME)/.ssh/id_rsa"
+if { ![file exists $RSA_FILE] } {
+        eval exec "/usr/bin/ssh-keygen -t rsa -f $RSA_FILE -N \"\" "
+}
+
+# Initial test of ssh to check for "REMOTE HOST IDENTIFICATION HAS CHANGED" - need to edit known_hosts file if this encoutered
+set command "ssh $user@$hostname"
+spawn -noecho /bin/sh -c $command
+log_user 0
+expect {
+        "Are you sure you want to continue connecting (yes/no)? " {
+       } "assword: " {
+       } "Last login" { 
+       } "REMOTE HOST IDENTIFICATION HAS CHANGED" {
+
+                expect "Host key verification failed" {
+
+                        foreach line [split $expect_out(buffer) "\n"] {
+                                if {[string match "Offending key*" $line]} {
+                                        regexp {(.*hosts):(\d+)} $line matched text hosts_line_number
+                                        exec sed -i ${hosts_line_number}d /root/.ssh/known_hosts
+                                }
+                        }
+                }
+        } "~*>" {
+                # We got a password-less connection - dont need to copy keys, so exiting
+                exit 0
+        } "~ #" {
+                # We got a password-less connection - dont need to copy keys, so exiting
+                exit 0
+        }
+
+}
+
+
+
+# Now we should be free to copy the keys
+set command "ssh-copy-id -i $user@$hostname"
+spawn -noecho /bin/sh -c $command
+log_user 0
+expect {
+        "Are you sure you want to continue connecting (yes/no)? " {
+                send "yes\r"
+                exp_continue
+
+        } "assword: " {
+                send "$password\r"
+                exp_continue
+
+        } "Last login" { 
+        } "make sure we haven't added extra keys that you weren't expecting." { 
+        }
+}
+
+
+
+

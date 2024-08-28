@@ -1,0 +1,61 @@
+#!/bin/bash
+
+DIR=`dirname $BASH_SOURCE[0]`
+SIM_BACKUP_DIR='/netsim/sim_backup/'
+
+. ${DIR}/../functions
+
+_save_configuration() {
+    NETSIM=$1
+    BACKUP_TAG=$2
+    execute_on_netsim_pipe $NETSIM ".select configuration\n.config save\n.config export $BACKUP_TAG force\$\$"
+}
+
+_save_simulations() {
+    NETSIM=$1
+    BACKUP_TAG=$2
+    execute_on_hosts "$NETSIM" netsim "mkdir -p $SIM_BACKUP_DIR" 
+    execute_on_hosts "$NETSIM" netsim "ls /netsim/netsimdir | sed -n 's/\(.*\)\.zip/\1/p' | while read SIM; do echo -e \".saveandcompress \${SIM}_$BACKUP_TAG force nopmdata\" | /netsim/inst/netsim_pipe -sim \$SIM -v; done"
+    execute_on_hosts "$NETSIM" netsim "mv /netsim/netsimdir/*${BACKUP_TAG}.zip $SIM_BACKUP_DIR"
+}
+
+backup_simulations() {
+    NETSIM=$1
+    BACKUP_TAG=$2
+    rm -f $SIM_BACKUP_DIR/*_$BACKUP_TAG.zip
+    _save_configuration $NETSIM $BACKUP_TAG
+    _save_simulations $NETSIM $BACKUP_TAG
+}
+
+_uncompress_simulations() {
+    NETSIM=$1
+    BACKUP_TAG=$2
+    execute_on_hosts "$NETSIM" netsim "cp $SIM_BACKUP_DIR/*${BACKUP_TAG}.zip /netsim/netsimdir/" 
+    execute_on_hosts "$NETSIM" netsim "ls /netsim/netsimdir | sed -n 's/\(.*\)_$BACKUP_TAG\.zip/\1/p' | while read SIM; do echo -e \".uncompressandopen \${SIM}_${BACKUP_TAG}.zip \$SIM force\" | /netsim/inst/netsim_pipe -v; done"
+    execute_on_hosts "$NETSIM" netsim "rm -f /netsim/netsimdir/*${BACKUP_TAG}.zip"
+}
+
+_import_configuration() {
+    NETSIM=$1
+    BACKUP_TAG=$2
+    execute_on_netsim_pipe $NETSIM ".select configuration\n.config import $BACKUP_TAG"
+}
+
+_stop_nodes() {
+    NETSIM=$1
+    execute_for_each_simulation "$NETSIM" ".select network\n.stop"
+}
+
+_start_nodes() {
+    NETSIM=$1
+    execute_for_each_simulation "$NETSIM" ".select network\n.start"
+}
+
+restore_simulations() {
+    NETSIM=$1
+    BACKUP_TAG=$2
+    _stop_nodes $NETSIM
+    _uncompress_simulations $NETSIM $BACKUP_TAG
+    _import_configuration $NETSIM $BACKUP_TAG
+    _start_nodes $NETSIM
+}

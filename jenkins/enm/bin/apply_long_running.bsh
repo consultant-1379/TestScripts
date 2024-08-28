@@ -1,0 +1,13 @@
+versantTrans() {
+    echo "$FUNCNAME - $(date)"
+    FILE="/ericsson/enm/dumps/.scripts/VersantTrans.sh"
+    cp /root/rvb/dumps_dir/VersantTrans.sh ${FILE}
+    chmod 755 ${FILE}
+    DB_NODES=$(/opt/ericsson/enminst/bin/vcs.bsh --groups | grep versant | awk '{print $3}')
+     for DB_NODE in $DB_NODES
+     do
+        echo $DB_NODE
+        /root/rvb/bin/ssh_to_vm_and_su_root.exp $DB_NODE 'egrep -v VersantTrans.sh /etc/crontab > /etc/crontab.new; echo "# */3 * * * * root /ericsson/enm/dumps/.scripts/VersantTrans.sh" >> /etc/crontab.new; mv -f /etc/crontab.new /etc/crontab '
+    done
+}
+versantTrans

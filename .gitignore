@@ -1,0 +1,8 @@
+# InteliJ files #
+worskpace.xml
+.idea/
+*.iml
+*.pyc
+*.sqlite3
+*.swp
+.vscode

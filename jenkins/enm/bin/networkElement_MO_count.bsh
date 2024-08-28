@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+node=$1
+netsim=`grep -ril ${node} /opt/ericsson/enmutils/etc/nodes/ | grep -v failed | grep -oP "ieatnetsimv[0-9]{4}-[0-9]{2,3}" | head -1`
+sim=`grep ${node} -ri /opt/ericsson/enmutils/etc/nodes/| grep -v failed | awk -F ", " '{print $23}' | head -1`
+
+echo -en "\e[0;35mNetsim VM:\e[0m\t" | sed 's/^/\t/g';
+echo $netsim
+
+echo -en "\e[0;35mNetsim Sim:\e[0m\t" | sed 's/^/\t/g';
+echo $sim
+
+echo -en "\e[0;35mNetsim Node:\e[0m\t" | sed 's/^/\t/g';
+echo $node
+
+echo -en "\e[0;35mNumber of MOs on node:\e[0m\t" | sed 's/^/\t/g';
+/usr/bin/ssh netsim@${netsim} "echo "\""dumpmotree:count;"\""| /netsim/inst/netsim_shell -sim ${sim} -ne ${node}" | sed 's/^/\t\t/g'

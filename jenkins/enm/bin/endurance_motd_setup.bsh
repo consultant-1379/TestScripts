@@ -1,0 +1,43 @@
+#!/bin/bash
+# ********************************************************************
+# Name    : endurance_motd_setup.bsh
+# Date    : 31/05/2017
+# Revision: A1
+# Purpose : To setup the /etc/motd file for Endurance LMS
+#
+# Usage   : ./endurance_motd_setup.bsh
+#
+# 08/11/16 Rev A:  Original version
+#
+# *******************************************************************
+
+ECHO=/bin/echo
+
+
+# Setting up colours
+RED=$(printf "\033[01;31m")
+NORMAL=$(printf "\033[m")
+GREEN=$(printf "\033[01;32m")
+
+$ECHO ""
+$ECHO "Updating /etc/motd for Endurance"
+
+$ECHO -e $GREEN > /etc/motd
+$ECHO ""  >> /etc/motd
+$ECHO "***********************************************************************"  >> /etc/motd
+$ECHO -e $RED >> /etc/motd
+$ECHO " ######  #    #  #####   #    #  #####     ##    #    #   ####   ######" >> /etc/motd
+$ECHO " #       ##   #  #    #  #    #  #    #   #  #   ##   #  #    #  #" >> /etc/motd
+$ECHO " #####   # #  #  #    #  #    #  #    #  #    #  # #  #  #       #####" >> /etc/motd
+$ECHO " #       #  # #  #    #  #    #  #####   ######  #  # #  #       #" >> /etc/motd
+$ECHO " #       #   ##  #    #  #    #  #   #   #    #  #   ##  #    #  #" >> /etc/motd
+$ECHO " ######  #    #  #####    ####   #    #  #    #  #    #   ####   ######" >> /etc/motd
+$ECHO "" >> /etc/motd
+$ECHO -e $GREEN >> /etc/motd
+$ECHO "****************** Authorised RV Endurance Users Only *****************" >> /etc/motd
+$ECHO -e $NORMAL >> /etc/motd
+$ECHO "" >> /etc/motd
+
+$ECHO ""
+$ECHO "Completed - /etc/motd updated for Endurance"
+$ECHO ""

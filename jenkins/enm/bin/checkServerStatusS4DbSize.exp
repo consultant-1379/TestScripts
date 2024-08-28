@@ -1,0 +1,70 @@
+#!/usr/bin/expect 
+
+
+set vm_hostname [lindex $argv 0]
+set user "litp-admin"
+set root_password "12shroot"
+spawn -noecho /bin/sh -c "ssh litp-admin\@$vm_hostname"
+set checkVersantVolume "/ericsson/versant/bin/dbtool -space -volume -all dps_integration\r"
+
+proc handle_offending_key { vm_hostname data } {
+        foreach line [split $data "\n"] {
+                if {[string match "Offending key*" $line]} {
+                        regexp {(.*hosts):(\d+)} $line matched text hosts_line_number
+                        exec sed -i ${hosts_line_number}d /root/.ssh/known_hosts
+                }
+        }
+        
+        puts "\n\nThe ssh key for $vm_hostname in /root/.ssh/known_hosts had expired and has now been removed by this script"
+        puts "Try to connect again by re-running last command"
+        exit 0
+}
+
+expect {
+        "$ " {
+                send "su -\r"
+                expect "assword: "
+                send "$root_password\r"
+                expect "# "
+                send -- "sudo -u versant /ericsson/versant/bin/dbtool -space -volume -all dps_integration"
+                send -- "\r"
+                expect "# "
+
+                close
+        } "Name or service not known" {
+                puts "\nCheck $vm_hostname and retry"
+                exit 0
+
+        } "route to host" {
+                puts "\nCant access $vm_hostname"
+                exit 0
+
+        } "Connection refused" {
+                puts "\nCant access $vm_hostname"
+                exit 0
+
+        } "assword: " {
+                send "$root_password\r"
+                exp_continue
+
+        } "Host key verification failed" {
+                handle_offending_key $vm_hostname $expect_out(buffer)
+
+        } "Offending key for IP*\n" {
+                handle_offending_key $vm_hostname $expect_out(buffer)
+
+        } "Are you sure you want to continue connecting (yes/no)? " {
+                send "yes\r"
+                exp_continue
+
+        } "consent to monitoring and data collection." {
+                expect "#####"
+                exp_continue
+
+        } "# " {
+
+        } "Permission denied" {
+                puts "\nLooks like script cannot connect to $vm_hostname with $user"
+                exit 0
+        } 
+}

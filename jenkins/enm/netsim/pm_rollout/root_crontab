@@ -1,0 +1,2 @@
+0 * * * * /netsim_users/pms/bin/limitbw -n -g
+00 */2 * * * /netsim_users/pms/bin/timesync

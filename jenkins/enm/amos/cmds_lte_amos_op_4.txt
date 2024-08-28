@@ -1,0 +1,4 @@
+lt all
+wait 10
+#dcgkf
+dcgm

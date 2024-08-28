@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><Entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="EntitiesSchema.xsd">
+<Entity>
+  <PublishCertificatetoTDPS>true</PublishCertificatetoTDPS>
+  <EntityProfile Name="DUSGen2OAM_CHAIN_EP" />
+  <KeyGenerationAlgorithm>
+    <Name>RSA</Name>
+    <KeySize>2048</KeySize>
+  </KeyGenerationAlgorithm>
+  <Category>
+    <Name>NODE-OAM</Name>
+  </Category>
+  <EntityInfo>
+    <Name>NODE_DUSGen2OAM_ENTITY</Name>
+    <Subject>
+      <SubjectField>
+        <Type>COMMON_NAME</Type>
+        <Value>NODE_DUSGen2OAM</Value>
+      </SubjectField>
+    </Subject>
+  </EntityInfo>
+</Entity>
+</Entities>

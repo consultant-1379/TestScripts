@@ -1,0 +1,672 @@
+#!/bin/bash
+
+# Sourcing bashrc file
+. ~/.bashrc
+
+#KEY
+KEYPAIR=/var/tmp/enm_keypair.pem
+esmon=`ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP "consul members | egrep 'esmon'"|head -1|awk '{print $1}'`
+CLI_APP="/opt/ericsson/enmutils/bin/cli_app"
+#CLUSTER=$1
+CMSERV=`ssh -i ${KEYPAIR} cloud-user@$EMP "consul members | grep -v lcmserv | egrep 'cmserv-0'"|head -1|awk '{print $1}'`
+consul_date=$(date '+%b %_d')
+DATE=`date +%Y%m%d`
+DDP_DATE=`date +%d%m%y`
+ddpsite=`ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${esmon} 'cat /etc/cron.d/ddc_upload | grep -oP '\''ddp.*'\'''"| awk {'print $1'}`
+ENV_NAME=`ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP 'consul members'  | grep emp | awk -F"-" {'print $1'}`
+fmx=`ssh -i ${KEYPAIR} cloud-user@$EMP "consul members | egrep 'fmx'"|head -1|awk '{print $1}'`
+#pm_time=$(date +%H -d  "1 hour ago")30
+dt1=`date "+%Y%m%d"`
+nbalarmirp0=`ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP "consul members | egrep 'nbalarmirp-0'"|head -1|awk '{print $1}'`
+nbalarmirp1=`ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP "consul members | egrep 'nbalarmirp-1'"|head -1|awk '{print $1}'`
+NEO_HOSTNAME=`ssh -i ${KEYPAIR} cloud-user@$EMP "consul members | grep -i neo "| head -1 | rev | cut -d "-" -f 1 --complement | rev`
+#NETSIM=`wget -q -O - --no-check-certificate -e use_proxy=yes -e https_proxy=atproxy1.athtem.eei.ericsson.se:3128 "https://cifwk-oss.lmera.ericsson.se/generateTAFHostPropertiesJSON/?clusterId=${CLUSTER}&allNetsims=true"| grep -o "\ieatnetsimv[0-9]*" | head -1`
+NETWORK="/opt/ericsson/enmutils/bin/network"
+postgres_node=`ssh -i ${KEYPAIR} cloud-user@$EMP "consul members | egrep 'postgres'"|head -1|awk '{print $1}'`
+opendj=`ssh -i ${KEYPAIR} cloud-user@$EMP "consul members | egrep 'opendj'"|head -1|awk '{print $1}'`
+roptime=$2
+rv_dailychecks_tmp_file="/ericsson/enm/dumps/.rv_dailychecks_tmp_file.log"
+rv_env=`ssh -i ${KEYPAIR} cloud-user@${EMP} 'cat /var/ericsson/ddc_data/config/ddp.txt | sed s/^....//'`
+SSHVM="/root/rvb/bin/ssh_to_vm_and_su_root.exp"
+UNSYNCHED='/opt/ericsson/enmutils/bin/cli_app "cmedit get * CmFunction.syncStatus!="SYNCHRONIZED" -t"'
+user_mgr="/opt/ericsson/enmutils/bin/user_mgr"
+VCC_DATE1=$(date +%b" "%d)
+VCC_DATE2=$(date | awk '{print $2,"",$3}')
+VCS="/opt/ericsson/enminst/bin/vcs.bsh"
+WORKLOAD=/opt/ericsson/enmutils/bin/workload
+workload_vm=`hostname`
+
+if [ $# -gt 0 ]; then
+    echo -e "\e[0;32m  Script Help - Run script as follows with no parameters   \e[0m"
+    echo "      ./rv_dailychecks.bsh"
+    echo
+    echo -e "\e[0;35mPRE-REQUISITES: \e[0m"| sed "s/^/\t/g"
+    echo "1). Ensure .pem key file is on WORKLOAD VM."| sed "s/^/\t/g"
+    echo "2). Ensure .pem key file is on EMP VM as /var/tmp/enm_keypair.pem with grp & owner set as cloud-user"| sed "s/^/\t/g"
+    echo "3). Ensure VNF_LAF & EMP variables are set in .bashrc on workload vm"| sed "s/^/\t/g"
+    echo "4). Ensure passwordless connection from EMP to workload VM"
+    exit 1
+fi
+
+[ ! -d /ericsson/enm/dumps/workload_vm_rv_dailychecks/ ] && mkdir -p /ericsson/enm/dumps/workload_vm_rv_dailychecks/ && chmod 777 /ericsson/enm/dumps/workload_vm_rv_dailychecks/
+
+touch ${rv_dailychecks_tmp_file}
+truncate -s 0 ${rv_dailychecks_tmp_file}
+
+
+enm_baseline(){
+        echo
+        echo -e "\e[0;32mCurrent ENM Baseline: \e[0m"
+        echo -e "\e[0;32m=====================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} 'consul kv get "enm/deployment/enm_version"'| sed "s/^/\t/g"
+}
+
+neo4j_status(){
+        echo
+        echo -e "\e[0;32mCurrent NEO4J Status: \e[0m"
+        echo -e "\e[0;32m=====================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-0 'source /ericsson/3pp/neo4j/conf/neo4j_env;/ericsson/3pp/neo4j/bin/cypher-shell -u neo4j -p Neo4jadmin123 -a bolt://neo4j:7687 '\''CALL dbms.cluster.overview();'\'''" | sed "s/^/\t/g"
+}
+
+neo_leader_moves(){
+        echo
+        echo -e "\e[0;32mRecent NEO4j Leader changes: \e[0m"
+        echo -e "\e[0;32m============================\e[0m"
+        for i in {0..2};do ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-$i 'egrep "\""Moving to LEADER state at term|Leader changed from MemberId"\"" /ericsson/neo4j_data/logs/debug.log | tail -10'" >> /var/tmp/neo4j_leader;
+        sed -i "s/^20/NEO4J-$i: 20/g" /var/tmp/neo4j_leader;
+        sed -i "s/^\/var/NEO4J-$i: \/var/g" /var/tmp/neo4j_leader;
+        done;
+        cat /var/tmp/neo4j_leader|grep INFO | sort -k2 | awk '{$5=""; print $0;}' | sed "s/^/\t/g";
+        echo;
+        cat /var/tmp/neo4j_leader | grep "I am MemberId" | awk '{print $1," ",$15}' | sed "s/^/\t/g" | sort | uniq;
+        rm -rf /var/tmp/neo4j_leader
+        }
+
+neo4j_GC(){
+        echo
+        echo -e "\e[0;32mRecent NEO4J Garbage Collection: \e[0m"
+        echo -e "\e[0;32m================================\e[0m"
+        for i in {0..2};do echo "#######${NEO_HOSTNAME}-$i##########" | sed "s/^/\t/g"; ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-$i 'egrep GC --colour /ericsson/neo4j_data/logs/debug.log | grep -v DiagnosticsManager'"| tail -5 | sed "s/^/\t/g";done
+}
+
+
+neo4j_info(){
+        echo
+        echo -e "\e[0;32mGeneral NEO4J Info: \e[0m"
+        echo -e "\e[0;32m===================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-0 'echo "\""/opt/ericsson/neo4j/util/neo4j_admin.py -v"\"" >> /tmp/neo_admin.bsh'"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-0 'echo "\""/opt/ericsson/neo4j/util/neo4j_admin.py -ut"\"" >> /tmp/neo_admin.bsh'"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-0 'echo "\""/opt/ericsson/neo4j/util/neo4j_admin.py -f"\"" >> /tmp/neo_admin.bsh'"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-0 'echo "\""/opt/ericsson/neo4j/util/neo4j_admin.py -cl"\"" >> /tmp/neo_admin.bsh'"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-0 'chmod 755 /tmp/neo_admin.bsh'"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-0 'sudo mv /tmp/neo_admin.bsh /ericsson/enm/dumps/neo_admin.bsh'" | sed "s/^/\t/g"
+        ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${NEO_HOSTNAME}-0 'sudo -i /ericsson/enm/dumps/neo_admin.bsh'" | sed "s/^/\t/g"
+}
+
+cm_cm_nbi(){
+        echo
+        echo -e "\e[0;32mCM_NBI: \e[0m"
+        echo -e "\e[0;32m=======\e[0m"
+        grep -i nbi_cm /var/log/messages|tail -18 | sed "s/^/\t/g"
+        echo
+        echo -e "\e[0;32mcm_events_nbi in SOLR:\e[0m" | sed "s/^/\t/g"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "curl -s 'http://solr:8983/solr/admin/cores?action=STATUS&core=cm_events_nbi&wt=json&indent=true&memory=true'|egrep 'name|numDocs'"| sed "s/^/\t/g"
+        echo
+        echo -e "\e[0;32mNBI_CM_Events Logs:\e[0m" | sed "s/^/\t/g"
+        ssh -t -i ${KEYPAIR} cloud-user@${EMP} 'sudo cat /var/log/messages | grep NBI_CM_Events -i|tail -18' | sed "s/^/\t/g"
+        echo
+}
+
+service_reg_status(){
+        echo
+        echo -e "\e[0;32mService Registry Status: \e[0m"
+        echo -e "\e[0;32m========================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "consul operator raft --list-peers" | sed "s/^/\t/g"
+}
+
+consul_left_instances(){
+        echo
+        echo -e "\e[0;32mList of any Consul members in status left: \e[0m"
+        echo -e "\e[0;32m==========================================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "consul members | egrep 'left|Status'" | sed "s/^/\t/g"
+
+}
+
+consul_members_count(){
+        echo
+        echo -e "\e[0;32mCount of # of Consul members: \e[0m"
+        echo -e "\e[0;32m=============================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "consul members | wc -l" | sed "s/^/\t/g"
+}
+
+consul_member_events(){
+        echo
+        echo -e "\e[0;32mVNF-LAF Consul EventMemberJoin / EventMemberLeave events: \e[0m"
+        echo -e "\e[0;32m=========================================================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@$VNF_LAF 'sudo cat /var/log/messages | grep -i consul | grep -i member | tail -10' | sed "s/^/\t/g"
+}
+
+cm_solr(){
+        echo
+        echo -e "\e[0;32mCurrent Number of Document stored in SOLR: \e[0m"
+        echo -e "\e[0;32m==========================================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "curl -s 'http://solr:8983/solr/admin/cores?action=STATUS&core=collection1&wt=json&indent=true&memory=true'|egrep 'name|numDocs'"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "curl -s 'http://solr:8983/solr/admin/cores?action=STATUS&core=cm_events_nbi&wt=json&indent=true&memory=true'|egrep 'name|numDocs'"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "curl -s 'http://solr:8983/solr/admin/cores?action=STATUS&core=cm_history&wt=json&indent=true&memory=true'|egrep 'name|numDocs'"
+}
+
+pm_nbi(){
+        echo
+        echo -e "\e[0;32mPM NBI Status:\e[0m"
+        echo -e "\e[0;32m==============\e[0m"
+        test -e /var/log/enmutils/daemon/pm_26.log
+                if [ $? -eq 0 ]; then
+                   grep "PM_26 NBI File Transfer Results" /var/log/enmutils/daemon/pm_26.log | tail -16| sed "s/^/\t\t/g"
+                else
+                        echo -e "\e[0;31mPM_NBI has not been setup. Workload Profile PM_26 needs to be started.\e[0m"| sed "s/^/\t\t/g"
+                fi
+}
+
+pm_stats(){
+        echo
+        echo -e "\e[0;32mPM COLLECTION STATISTICS: \e[0m"
+        echo -e "\e[0;32m=========================\e[0m"
+    /root/rvb/bin/Quick_PM_data_Check.sh | sed "s/^/\t\t/g"
+    #echo "select T3.node_type,T3.file_type,sum(T3.files_collected) as FilesCollected,T3.total_nodes from (select T2.node_type,case when T2.fileType like 'uetrfile.bin.gz' then 'RNC_UETR' when T2.fileType like 'Mp%.bin.gz' then 'RNC_GPEH' when T2.fileType like 'ctrfile.bin.gz' then 'PM_RNC_CELLTRAFFIC' when T2.fileType like '1.bin.gz' then 'Low_Prio_CellTrace' when T2.fileType like '3.bin.gz' then 'High_Prio_CellTrace' when T2.fileType like 'statsfile%' then 'PM_Statistical' when T2.fileType like 'uetracefile%' then 'PM_UETrace' when (T2.node_type='ERBS' OR T2.node_type='RadioNode') AND (T2.fileType like '1.xml.gz%') then 'PM_EBSL' when (T2.node_type='SGSN-MME') AND (T2.fileType like '1.xml.gz') then 'PM_EBSM_ENIQ' when (T2.node_type='SGSN-MME') AND (T2.fileType like '1.xml') then 'PM_EBSM_3GPP' when (T2.node_type='SGSN-MME') AND (T2.fileType like 'ebs.%') then 'PM_EBM' when T2.fileType like 'ctum.%' then 'PM_CTUM' else T2.fileType end file_Type,T2.files_collected,T2.total_nodes from (select T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes from (select node_type,split_part(file_location, '_', (length(file_location)-(length(replace(file_location, '_', '')))+1)) as fileType,count(*) as files_collected,case when node_type like 'ERBS' then '${nE}' when node_type like 'MGW' then '${nM}' when node_type like 'RadioNode' then '${nR}' when node_type like 'SGSN-MME' then '${nS}'  when node_type like 'RNC' then '${R}' when node_type like 'RBS' then '${nRb}'  when node_type like 'Router6672' then '${nS1}' end total_nodes from pm_rop_info where file_location like "\""%%A${dt1}.${1}%"\"" and node_type in ('ERBS','MGW','SGSN-MME','Router6672','RNC','RBS','RadioNode') group by node_type,substring(split_part(file_location, '/', 6) from 1 for 19),split_part(file_location, '_', (length(file_location)-(length(replace(file_location, '_', '')))+1)) order by node_type) T1 group by T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes order by T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes) T2 group by T2.node_type,T2.fileType,T2.files_collected,T2.total_nodes order by T2.node_type,T2.fileType,T2.files_collected,T2.total_nodes) T3 group by T3.node_type,T3.file_type,T3.files_collected,T3.total_nodes order by T3.node_type,T3.file_type,T3.files_collected,T3.total_nodes;" > /var/tmp/pmic.sql?"\""
+        #echo "select T2.node_type,case when T2.filetype like '1.bin.gz' then 'Low_Prio_CellTrace' when T2.filetype like '3.bin.gz' then 'High_Prio_CellTrace' when T2.filetype like 'statsfile%' then 'PM_Statistical' when T2.filetype like 'uetracefile%' then 'PM_UETrace' when T2.filetype like 'uetrfile.bin.gz' then 'UETR' when T2.filetype like 'ctrfile.bin.gz' then 'CTR' when T2.filetype like 'rnc_gpehfile' then 'UETR' when (T2.node_type='ERBS' OR T2.node_type='RadioNode') AND (T2.filetype like '1.xml.gz%') then 'PM_EBSL' when (T2.node_type='SGSN-MME') AND (T2.filetype like '1.xml.gz%') then 'PM_EBSM_3GPP/ENIQ' when (T2.node_type='RNC') AND (T2.filetype like 'uetrfile.bin.gz%') then 'RNC_UETR' when (T2.node_type='RNC') AND (T2.filetype like 'ctrfile.bin.gz%') then 'RNC_CTR' when (T2.node_type='RNC') AND (T2.filetype like 'rnc_gpehfile.bin.gz%') then 'RNC_GPEH' when T2.filetype like 'ctum.%' then 'PM_CTUM' else T2.fileType end file_Type,T2.files_collected,T2.total_nodes from (select T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes from (select node_type,split_part(file_location, '_', (length(file_location)-(length(replace(file_location, '_', '')))+1)) as fileType,count(*) as files_collected,case when node_type like 'ERBS' then '${nE}' when node_type like 'MGW' then '${nM}' when node_type like 'RNC' then '${nRNC}' when node_type like 'RadioNode' then '${nR}' when node_type like 'SGSN-MME' then '${nS}' when node_type like 'Router6672' then '${nS1}' end total_nodes from pm_rop_info where file_location like '%%A${1}.${2}%' and node_type in ('ERBS','MGW','RadioNode','SGSN-MME','Router6672','RNC') group by node_type,substring(split_part(file_location, '/', 6) from 1 for 19),split_part(file_location, '_', (length(file_location)-(length(replace(file_location, '_', '')))+1)) order by node_type) T1 group by T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes order by T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes) T2 group by T2.node_type,T2.filetype,T2.files_collected,T2.total_nodes order by T2.node_type,T2.filetype,T2.files_collected,T2.total_nodes;" > /tmp/pmic.sql
+        #echo -e "\e[0;33mExecuting Query for ROP \e[0m $1 $2"| sed "s/^/\t/g"
+        #echo "============================================"| sed "s/^/\t/g"
+        #scp -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${postgres_node} 'sudo /opt/rh/postgresql92/root/usr/bin/psql -h postgres -U postgres -d flsdb -f /tmp/pmic.sql -q'"| sed "s/^/\t/g"
+        #ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${postgres_node} 'sudo /opt/rh/postgresql92/root/usr/bin/psql -h postgres -U postgres -d flsdb -f /tmp/pmic.sql -q'"| sed "s/^/\t/g"
+        #echo -e "\e[0;33m********** END of QUERY Execution *********** \e[0m"| sed "s/^/\t/g"
+        #rm -f /tmp/pmic.sql
+
+#echo -e "\e[0;33m  Checking Number of Nodes ... \e[0m"
+#nE=8960
+#nR=1040
+#roptime=1700
+#dt1=`date "+%Y%m%d"`
+#echo "select T3.node_type,T3.file_type,sum(T3.files_collected) as FilesCollected,T3.total_nodes from (select T2.node_type,case when T2.fileType like 'uetrfile.bin.gz' then 'RNC_UETR' when T2.fileType like 'Mp%.bin.gz' then 'RNC_GPEH' when T2.fileType like 'ctrfile.bin.gz' then 'PM_RNC_CELLTRAFFIC' when T2.fileType like '1.bin.gz' then 'Low_Prio_CellTrace' when T2.fileType like '3.bin.gz' then 'High_Prio_CellTrace' when T2.fileType like 'statsfile%' then 'PM_Statistical' when T2.fileType like 'uetracefile%' then 'PM_UETrace' when (T2.node_type='ERBS' OR T2.node_type='RadioNode') AND (T2.fileType like '1.xml.gz%') then 'PM_EBSL' when (T2.node_type='SGSN-MME') AND (T2.fileType like '1.xml.gz') then 'PM_EBSM_ENIQ' when (T2.node_type='SGSN-MME') AND (T2.fileType like '1.xml') then 'PM_EBSM_3GPP' when (T2.node_type='SGSN-MME') AND (T2.fileType like 'ebs.%') then 'PM_EBM' when T2.fileType like 'ctum.%' then 'PM_CTUM' else T2.fileType end file_Type,T2.files_collected,T2.total_nodes from (select T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes from (select node_type,split_part(file_location, '_', (length(file_location)-(length(replace(file_location, '_', '')))+1)) as fileType,count(*) as files_collected,case when node_type like 'ERBS' then '${nE}' when node_type like 'MGW' then '${nM}' when node_type like 'RadioNode' then '${nR}' when node_type like 'SGSN-MME' then '${nS}'  when node_type like 'RNC' then '${R}' when node_type like 'RBS' then '${nRb}'  when node_type like 'Router6672' then '${nS1}' end total_nodes from pm_rop_info where file_location like "\""%%A${dt1}.${roptime}%"\"" and node_type in ('ERBS','MGW','SGSN-MME','Router6672','RNC','RBS','RadioNode') group by node_type,substring(split_part(file_location, '/', 6) from 1 for 19),split_part(file_location, '_', (length(file_location)-(length(replace(file_location, '_', '')))+1)) order by node_type) T1 group by T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes order by T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes) T2 group by T2.node_type,T2.fileType,T2.files_collected,T2.total_nodes order by T2.node_type,T2.fileType,T2.files_collected,T2.total_nodes) T3 group by T3.node_type,T3.file_type,T3.files_collected,T3.total_nodes order by T3.node_type,T3.file_type,T3.files_collected,T3.total_nodes;" > /tmp/pmic.sql
+#ssh -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@131.160.200.46 'sudo scp ieatwlvm6070.athtem.eei.ericsson.se:/tmp/pmic.sql /ericsson/enm/dumps/'
+#ssh -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@131.160.200.46 'sudo scp ieatwlvm6070.athtem.eei.ericsson.se:/var/tmp/enm_keypair.pem /ericsson/enm/dumps/enm_keypair.pem'
+#echo -e "\e[0;33m Executing Query for ROP \e[0m ${dt1} ${roptime} .... "
+#echo "===================================================================="
+#ssh -i /var/tmp/enm_keypair.pem cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@postgres 'sudo /opt/rh/postgresql92/root/usr/bin/psql -h postgres -U postgres -d flsdb -f /ericsson/enm/dumps/pmic.sql -q'"
+
+
+#echo "select T3.node_type,T3.file_type,sum(T3.files_collected) as FilesCollected,T3.total_nodes from (select T2.node_type,case when T2.fileType like 'uetrfile.bin.gz' then 'RNC_UETR' when T2.fileType like 'Mp%.bin.gz' then 'RNC_GPEH' when T2.fileType like 'ctrfile.bin.gz' then 'PM_RNC_CELLTRAFFIC' when T2.fileType like '1.bin.gz' then 'Low_Prio_CellTrace' when T2.fileType like '3.bin.gz' then 'High_Prio_CellTrace' when T2.fileType like 'statsfile%' then 'PM_Statistical' when T2.fileType like 'uetracefile%' then 'PM_UETrace' when (T2.node_type='ERBS' OR T2.node_type='RadioNode') AND (T2.fileType like '1.xml.gz%') then 'PM_EBSL' when (T2.node_type='SGSN-MME') AND (T2.fileType like '1.xml.gz') then 'PM_EBSM_ENIQ' when (T2.node_type='SGSN-MME') AND (T2.fileType like '1.xml') then 'PM_EBSM_3GPP' when (T2.node_type='SGSN-MME') AND (T2.fileType like 'ebs.%') then 'PM_EBM' when T2.fileType like 'ctum.%' then 'PM_CTUM' else T2.fileType end file_Type,T2.files_collected,T2.total_nodes from (select T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes from (select node_type,split_part(file_location, '_', (length(file_location)-(length(replace(file_location, '_', '')))+1)) as fileType,count(*) as files_collected,case when node_type like 'ERBS' then '${nE}' when node_type like 'MGW' then '${nM}' when node_type like 'RadioNode' then '${nR}' when node_type like 'SGSN-MME' then '${nS}'  when node_type like 'RNC' then '${R}' when node_type like 'RBS' then '${nRb}'  when node_type like 'Router6672' then '${nS1}' end total_nodes from pm_rop_info where file_location like '%%A${dt1}.${roptime}%' and node_type in ('ERBS','MGW','SGSN-MME','Router6672','RNC','RBS','RadioNode') group by node_type,substring(split_part(file_location, '/', 6) from 1 for 19),split_part(file_location, '_', (length(file_location)-(length(replace(file_location, '_', '')))+1)) order by node_type) T1 group by T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes order by T1.node_type,T1.fileType,T1.files_collected,T1.total_nodes) T2 group by T2.node_type,T2.fileType,T2.files_collected,T2.total_nodes order by T2.node_type,T2.fileType,T2.files_collected,T2.total_nodes) T3 group by T3.node_type,T3.file_type,T3.files_collected,T3.total_nodes order by T3.node_type,T3.file_type,T3.files_collected,T3.total_nodes;" > /ericsson/enm/dumps/pmic.sql
+
+#Tested with Rajesh and these worked:
+#[16:16:39 root@ieatwlvm010:~ ]# ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP "consul members | egrep 'postgres'"|head -1|awk '{print $1}'
+#[16:19:15 root@ieatwlvm010:~ ]# ssh -t -i /var/tmp/enm_keypair.pem cloud-user@${EMP} 'sudo scp ieatwlvm010.athtem.eei.ericsson.se:/tmp/pmic.sql /ericsson/enm/dumps/'
+#[16:18:33 root@ieatwlvm010:~ ]# ssh -i /var/tmp/enm_keypair.pem cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@ieatenmc5b03-postgres-0 'sudo /opt/rh/postgresql92/root/usr/bin/psql -h postgres -U postgres -d flsdb -f /ericsson/enm/dumps/pmic.sql -q'"
+}
+
+
+shm_info(){
+        echo
+        echo -e "\e[0;32mSHM Job Status for $(date +%b" "%d):\e[0m"
+        echo -e "\e[0;32m==========================\e[0m"
+        ${CLI_APP} 'shm status --all' | grep $(date +%d/%m/%Y) > ${rv_dailychecks_tmp_file}
+        echo ""
+        echo -e "\e[0;35mSummary of SHM Job status:\e[0m" | sed "s/^/\t/g"
+        for i in `awk '{print $2}' ${rv_dailychecks_tmp_file}| sort | uniq`;
+            do for n in `awk '{print $6}' ${rv_dailychecks_tmp_file}| sort | uniq`;
+                do for m in `awk '{print $7}' ${rv_dailychecks_tmp_file}| sort | uniq`;
+                    do echo -en '\t' $i" ";
+                        echo -en '\t' $n;
+                        echo -en '\t' $m" ";
+                        echo -en '\t';
+                        cat ${rv_dailychecks_tmp_file} | grep -w $i | grep $n | grep -c $m;
+                    done;
+                    echo "";
+                done;
+            done
+
+        echo ""
+        echo -e "\e[1;34mFailed or Skipped SHM Backup Jobs:\e[0m" | sed "s/^/\t/g"
+        cat ${rv_dailychecks_tmp_file} | egrep -w "BACKUP" | egrep "FAILED|SKIPPED" | sed "s/^/\t/g"
+        echo ""
+        echo -e "\e[1;32mFailed or Skipped SHM DeleteBackup Jobs:\e[0m" | sed "s/^/\t/g"
+        cat ${rv_dailychecks_tmp_file} | egrep "DELETEBACKUP" | egrep "FAILED|SKIPPED" | sed "s/^/\t/g"
+        echo ""
+        echo -e "\e[1;36mFailed or Skipped SHM Upgrade Jobs:\e[0m" | sed "s/^/\t/g"
+        cat ${rv_dailychecks_tmp_file} | egrep "UPGRADE" | egrep "FAILED|SKIPPED" | sed "s/^/\t/g"
+        echo ""
+        echo -e "\e[1;35mSHM Jobs with 100 or more nodes:\e[0m" | sed "s/^/\t/g"
+        cat ${rv_dailychecks_tmp_file} | awk '$4 > 99 {print}' | sed "s/^/\t/g"
+        echo ""
+        truncate -s 0 ${rv_dailychecks_tmp_file}
+}
+
+
+mo_numbers(){
+        echo
+        echo -e "\e[0;32mMO Numbers: \e[0m"
+        echo -e "\e[0;32m===========\e[0m"
+        echo "# Managed Element MOs"| sed "s/^/\t/g"
+        ${CLI_APP} "cmedit get * ManagedElement -cn" | tail -1| sed "s/^/\t/g"
+        echo "# ENodebFunction MOs"| sed "s/^/\t/g"
+        ${CLI_APP} "cmedit get * ENodebFunction -cn" | tail -1| sed "s/^/\t/g"
+        echo "# Network Element MOs"| sed "s/^/\t/g"
+        ${CLI_APP} "cmedit get * NetworkElement -cn" | tail -1| sed "s/^/\t/g"
+        echo "# Synched Nodes"| sed "s/^/\t/g"
+        ${CLI_APP} "cmedit get * CmFunction.syncStatus==SYNCHRONIZED -cn"|tail -1| sed "s/^/\t/g"
+        echo ""
+        echo "# SGSN-MME SystemFunctions MOs"| sed "s/^/\t/g"
+        ${CLI_APP} "cmedit get * SystemFunctions -ne=SGSN-MME" | tail -1| sed "s/^/\t/g"
+        echo "# SGSN-MMEs Synched"| sed "s/^/\t/g"
+        ${CLI_APP} "cmedit get * CmFunction.syncStatus -ne=SGSN-MME -cn"|tail -1| sed "s/^/\t/g"
+}
+
+cm_list_unsynched_nodes(){
+        echo
+        echo -e "\e[0;32mList of Nodes NOT CM SYNCHRONIZED: \e[0m"
+        echo -e "\e[0;32m==================================\e[0m"
+        ${CLI_APP} "cmedit get * CmFunction.syncStatus!=SYNCHRONIZED -t"| sed "s/^/\t/g"
+}
+
+convert_time_to_seconds(){
+                time_in_secs=$(echo $1 | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }')
+}
+
+cm_network_status(){
+        echo
+        echo -e "\e[0;32mCurrent Network Status: \e[0m"
+        echo -e "\e[0;32m======================\e[0m"
+        ${NETWORK} status --groups --sl| sed "s/^/\t/g"
+}
+
+network_status_check(){
+        echo
+        echo -e "\e[0;32mOverview of Network Status: \e[0m"
+        echo -e "\e[0;32m===========================\e[0m"
+        /root/rvb/bin/network_status_check.bsh | sed "s/^/\t/g"
+}
+
+cm_node_numbers(){
+        echo
+        echo -e "\e[0;32mNumber of NEs in the network: \e[0m"
+        echo -e "\e[0;32m=============================\e[0m"
+        for TYPE in `${CLI_APP} "cmedit get * NetworkElement.neType" | grep neType | cut -d":" -f2 | sort -u`; do echo -en "${TYPE}:\t"; ${CLI_APP} "cmedit get * NetworkElement -ne=${TYPE} -cn" | tail -1;done| sed "s/^/\t/g"
+    echo -en "Mixed Mode RadioNodes (technologyDomain = UMTS & EPS): "| sed "s/^/\t/g"
+    ${CLI_APP} 'cmedit get * NetworkElement.technologyDomain -t'|grep UMTS | grep -v SGSN | grep EPS -c| sed "s/^/\t/g"
+}
+
+fm_node_status(){
+        echo
+        echo -e "\e[0;32mFM Node Status: \e[0m"
+        echo -e "\e[0;32m===============\e[0m"
+        for TYPE in `${CLI_APP} "cmedit get * NetworkElement.neType" | grep neType | cut -d":" -f2 | sort -u`; do echo ${TYPE}; /opt/ericsson/enmutils/bin/cli_app "cmedit get * FmFunction.currentServiceState -ne=${TYPE}" | grep currentServiceState | cut -d":" -f2 | sort | uniq -c;done| sed "s/^/\t/g"
+		echo ""
+	    echo -e "\e[0;35mDistribution of nodes across FM Mediation Service instances (FmRouterPolicyMappings.txt): \e[0m"| sed "s/^/\t/g"
+		ssh -i ${KEYPAIR} cloud-user@$EMP 'strings /ericsson/tor/data/fm/fmrouterpolicy/data/FmRouterPolicyMappings.txt | grep -oP '.*mediationservice' | sort | uniq -c | sort -nrk1 | sed "s/^/\t/g"'
+		echo ""
+		echo -e -n "\e[0;35mTotal Nodes FM supervised is: \e[0m"  | sed "s/^/\t/g"
+		ssh -i ${KEYPAIR} cloud-user@$EMP "strings /ericsson/tor/data/fm/fmrouterpolicy/data/FmRouterPolicyMappings.txt | grep -c $ENV_NAME "
+}
+
+fm_hb_failure(){
+        echo
+        echo -e "\e[0;32mList of nodes in HB Failure state: \e[0m"
+        echo -e "\e[0;32m==================================\e[0m"
+            ${CLI_APP} "alarm status * -fail" | sed "s/^/\t/g"
+}
+
+fm_enm_alarms(){
+        echo
+        echo -e "\e[0;32mSummary of ENM Management System FM Alarm Specific Problems reported for today: \e[0m"
+        echo -e "\e[0;32m===============================================================================\e[0m"
+        ${CLI_APP} 'alarm get ENM' |grep "$(date +%Y-%m-%d)" > ${rv_dailychecks_tmp_file}
+        for i in `awk '{print $1}' ${rv_dailychecks_tmp_file} | uniq`;
+        do
+                echo $i | sed "s/^/\t/g";
+                grep $i ${rv_dailychecks_tmp_file} | awk -F "\t" {'print $3}' | sort | uniq -c| sort -nrk1 | sed "s/^/\t/g";
+        done
+        echo ""
+        echo -e "\e[0;35mFor full details run: \e[0m cli_app 'alarm get ENM' |grep $(date +%Y-%m-%d) " | sed "s/^/\t/g"
+        truncate -s 0 ${rv_dailychecks_tmp_file}
+}
+
+fm_alarm_count(){
+        echo
+        echo -e "\e[0;32mFM Alarm Count: \e[0m"
+        echo -e "\e[0;32m===============\e[0m"
+        ${CLI_APP} 'alarm get * --count' | awk '{print $NF}' | sed "s/^/\t/g"
+}
+
+#cm_nodes_unsynched(){
+#        echo
+#        echo -e "\e[0;32mList of unsynched nodes: \e[0m"
+#        echo -e "\e[0;32m========================\e[0m"#
+#       for i in {01.."$NUM_NETSIM_VM"}; do echo -n "$NETSIM-$i :"; ${UNSYNCHED}|grep -c $NETSIM-$i; done
+#}
+
+netsim_stopped_nodes(){
+        echo
+        echo -e "\e[0;32mList of Netsim Stopped Nodes: \e[0m"
+        echo -e "\e[0;32m=============================\e[0m"
+        for i in {01..50};do echo -n "$NETSIM-$i"; ssh -X netsim@$NETSIM-$i 'echo ".show nodes stopped" | /netsim/inst/netsim_shell;echo ".show nodes error" | /netsim/inst/netsim_shell;';done| sed "s/^/\t/g"
+        #for i in {01..50};do echo -n "ieatnetsimv7017-$i"; ssh -X netsim@ieatnetsimv7017-$i 'echo ".show nodes stopped" | /netsim/inst/netsim_shell;echo ".show nodes error" | /netsim/inst/netsim_shell';done
+}
+
+
+nfs_volume_sizes(){
+        echo
+        echo -e "\e[0;32mNFS Volume Sizes: \e[0m"
+        echo -e "\e[0;32m=================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@$EMP 'df -hP -x ext4|sort -nk5'| sed "s/^/\t/g"
+        ssh -i ${KEYPAIR} cloud-user@$EMP "ssh -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@${CMSERV} 'df -hP' | egrep 'nfsnetlog|nfsnorollback'" | sort -nk5 | sed "s/^/\t/g"
+}
+
+list_thread_dumps(){
+        echo
+        echo -e "\e[0;32mList of thread dumps: \e[0m"
+        echo -e "\e[0;32m=====================\e[0m"
+                ssh -i ${KEYPAIR} cloud-user@$EMP '/bin/ls -ltr /ericsson/enm/dumps/thread_dumps/'| sed "s/^/\t/g"
+}
+
+cm_import_status(){
+        echo
+        echo -e "\e[0;32mCM Import Status for $(date +%b" "%d): \e[0m"
+        echo -e "\e[0;32m============================\e[0m"
+        echo -e "\e[0;35mNumber of Imports up to $(date): \e[0m" | sed "s/^/\t/g"
+                ${CLI_APP} 'cmedit import -st'| egrep "$(date +%Y-%m-%d)" | wc -l | sed "s/^/\t/g"
+        echo -e "\e[0;35m5k MO Import Change (STKPI - CMIMPORT_05) on $(date +%b" "%d): \e[0m" | sed "s/^/\t/g"
+                ${CLI_APP} 'cmedit import -st'| egrep "Job|$(date +%Y-%m-%d)" | cut -f1-5,9,12- |egrep -i "cm_import_05|Status"
+                echo -e "\e[0;35mList of failed Imports up to $(date): \e[0m" | sed "s/^/\t/g"
+        ${CLI_APP} 'cmedit import -st'| egrep "Job|$(date +%Y-%m-%d)" | cut -f1-5,13- | egrep -i "failed|Status" | sed "s/^/\t/g"
+}
+
+cm_activations_status(){
+        echo
+        echo -e "\e[0;32mCM Activations Status for $(date +%b" "%d): \e[0m"
+        echo -e "\e[0;32m=================================\e[0m"
+                ${CLI_APP} 'config activate -st'| egrep "Job|$(date +%Y-%m-%d)" | cut -f1-6,8 | sed "s/^/\t/g"
+}
+
+cm_export_status(){
+        echo
+        echo -e "\e[0;32mCM Export Status for $(date +%b" "%d): \e[0m"
+        echo -e "\e[0;32m============================\e[0m"
+                echo -e "\e[0;35mNumber of Exports up to $(date): \e[0m" | sed "s/^/\t/g"
+                ${CLI_APP} 'cmedit export -st'| egrep "$(date +%Y-%m-%d)" | wc -l | sed "s/^/\t/g"
+                echo -e "\e[0;35mFull Network Exports (CMEXPORT_01) on $(date +%b" "%d): \e[0m" | sed "s/^/\t/g"
+                ${CLI_APP} 'cmedit export -st'| egrep "Job|$(date +%Y-%m-%d)" | cut -f1-8,11 | egrep -i "Status|cmexport_01" | sed "s/^/\t/g"
+                echo -e "\e[0;35mList of failed Exports up to $(date): \e[0m" | sed "s/^/\t/g"
+        ${CLI_APP} 'cmedit export -st' | egrep "Job|$(date +%Y-%m-%d)" | cut -f1-5,9-11,13 | awk '$6 != 0 {print $N}'
+}
+
+cm_configs(){
+        echo
+        echo -e "\e[0;32mCurrent List of Configs: \e[0m"
+        echo -e "\e[0;32m========================\e[0m"
+                ${CLI_APP} 'config list --verbose' | sed "s/^/\t/g"
+}
+
+workload_status(){
+        echo
+        echo -e "\e[0;32mWorkload Status as at $(date): \e[0m"
+        echo -e "\e[0;32m===================================================\e[0m"
+                ${WORKLOAD} status -v | sed "s/^/\t/g"
+}
+
+workload_errored_nodes(){
+        echo
+        echo -e "\e[0;32mWorkload Errored Nodes $(date): \e[0m"
+        echo -e "\e[0;32m====================================================\e[0m"
+                ${WORKLOAD} list all --errored-nodes | sed "s/^/\t/g"
+}
+
+check_ddp_mountpoint(){
+        echo
+        echo -e "\e[0;32mChecking if ${ddpsite} File System is mounted: \e[0m"
+        echo -e "\e[0;32m===========================================\e[0m"
+                [[ -z $(mount | egrep ${ddpsite}:) ]] && mount ${ddpsite}:/data/stats /net/${ddpsite}/data/stats && echo "Mounting ${ddpsite} File System" || echo "${ddpsite} File System is already mounted" | sed "s/^/\t/g"
+}
+
+torutils_info(){
+        echo
+        echo -e "\e[0;32mTorutils RPM Info:\e[0m"
+        echo -e "\e[0;32m==================\e[0m"
+        echo -e "\e[0;35mCurrent installed version of torutils:\e[0m" | sed "s/^/\t/g"
+        cat /etc/torutils-version | sed "s/^/\t/g"
+        echo ""
+        echo -e "\e[0;35mTorutils History Info:\e[0m" | sed "s/^/\t/g"
+        cat /etc/torutils-history | sed "s/^/\t/g"
+        echo ""
+}
+
+cm_unsynched_nodes_by_type(){
+        echo
+        echo -e "\e[0;32mNumber of nodes unsynched per Node Type: \e[0m"
+        echo -e "\e[0;32m========================================\e[0m"
+                for TYPE in `${CLI_APP} "cmedit get * NetworkElement.neType" | grep neType | cut -d":" -f2 | sort -u`; do echo -n "${TYPE} "; ${CLI_APP} "cmedit get * CmFunction.syncStatus==UNSYNCHRONIZED -ne=${TYPE} -cn"|grep -v found ;done | sed "s/^/\t/g"
+}
+
+cm_network_cell_count(){
+        echo
+        echo -e "\e[0;32mNumber of cells in the network: \e[0m"
+        echo -e "\e[0;32m===============================\e[0m"
+                ${CLI_APP} "cmedit get * EUtrancellFDD -cn" | grep found | sed "s/^/\t/g"
+                ${CLI_APP} "cmedit get * Utrancell -cn" | grep found | sed "s/^/\t/g"
+}
+
+fm_nbi(){
+        echo
+        echo -e "\e[0;32mFM NBI Status: \e[0m"
+        echo -e "\e[0;32m==============\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@${nbalarmirp0} 'cd /opt/ericsson/com.ericsson.oss.nbi.fm/test_client/;./testclient.sh subscriptionData | grep '\''active subscription(s) available in the system'\'' --colour'" | sed "s/^/\t/g"
+        echo ""
+        echo -e "\e[0;35mFM NBI clients running on ${nbalarmirp0}: \e[0m" | sed "s/^/\t/g"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${nbalarmirp0} 'ps -ef | grep [t]estclient.sh|wc -l'" | sed "s/^/\t/g"
+        echo -e "\e[0;35mFM NBI clients running on ${nbalarmirp1}: \e[0m" | sed "s/^/\t/g"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${nbalarmirp1} 'ps -ef | grep [t]estclient.sh|wc -l'" | sed "s/^/\t/g"
+        echo -e "\e[0;35mFM NBI clients running on ${workload_vm}: \e[0m" | sed "s/^/\t/g"
+        ps -ef | grep [t]estclient.sh|wc -l | sed "s/^/\t/g"
+}
+
+fmx_checks(){
+        echo
+        echo -e "\e[0;32mFMX Status: \e[0m"
+        echo -e "\e[0;32m===========\e[0m"
+        echo -e "\e[0;35mStatus of FMX modules: \e[0m" | sed "s/^/\t/g"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@${fmx} 'fmxcli -c list'" | sed "s/^/\t/g"
+        echo ""
+        echo -e "\e[0;35mFMX modules used in recent alarm filters: \e[0m" | sed "s/^/\t/g"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${fmx} 'cat /var/log/fmx/fmxie_ruletrace.log | cut -d"\"";"\"" -f6 | sort | uniq -c'" | sed "s/^/\t/g"
+}
+
+
+rollback_transactions(){
+        echo
+        echo -e "\e[0;32mNumber of EJBTransactionRolledbackException received on $(date +%b" "%d): \e[0m"
+        echo -e "\e[0;32m===============================================================\e[0m"
+        echo -e "\e[0;35mList of DDP csv.gz files currently available for $(date +%b" "%d): \e[0m" | sed "s/^/\t/g"
+        ls -ltr /net/${ddpsite}/data/stats/tor/LMI_${rv_env}/analysis/${DDP_DATE}/enmlogs/*csv.gz | sed "s/^/\t/g"
+        echo ""
+        echo -e "\e[0;35mNumber of EJBTransactionRolledbackException received on $(date +%b" "%d): \e[0m" | sed "s/^/\t/g"
+        zgrep -c EJBTransactionRolledbackException /net/${ddpsite}/data/stats/tor/LMI_${rv_env}/analysis/${DDP_DATE}/enmlogs/*csv.gz | sed "s/^/\t/g"
+#        echo ""
+#        echo -e "\e[0;35mNumber of EJBTransactionRolledbackException received per VM on $(date +%b" "%d): \e[0m" | sed "s/^/\t/g"
+#        zgrep EJBTransactionRolledbackException /net/${ddpsite}/data/stats/tor/LMI_${rv_env}/analysis/${DDP_DATE}/enmlogs/*.csv.gz|grep -oP "@.*@JBOSS@ERROR" | sort | uniq -c | sort -nrk1 | sed "s/^/\t/g"
+}
+
+queues_hanging(){
+        echo
+        echo -e "\e[0;32mQueues with occurences of\e[0m \e[0;35m\"There are possibly consumers hanging on a network operation:\"\e[0m"
+        echo -e "\e[0;32m========================================================================================\e[0m"
+        zgrep "There are possibly consumers hanging on a network operation" /net/${ddpsite}/data/stats/tor/LMI_${rv_env}/analysis/${DDP_DATE}/enmlogs/*csv.gz | grep -oP "Queue.*" | awk '{print $2}' | sort | uniq -c | sed "s/^/\t/g"
+        zgrep "There are possibly consumers hanging on a network operation" /net/${ddpsite}/data/stats/tor/LMI_${rv_env}/analysis/${DDP_DATE}/enmlogs/*csv.gz | grep -oP "Queue.*" > /dev/null
+        if [ $? == 1 ]; then echo "No Queues reported \"There are possibly consumers hanging on a network operation\""; fi | sed "s/^/\t/g"
+}
+
+postgres_checks(){
+        echo
+        echo -e "\e[0;32mPostgres Checks: \e[0m"
+        echo -e "\e[0;32m================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${postgres_node} 'sudo /opt/ericsson/pgsql/util/postgres_admin.sh -V -U -C -S'" | sed "s/^/\t/g"
+}
+
+opendj_replication_status(){
+        echo
+        echo -e "\e[0;32mChecking Opendj Replication Status: \e[0m"
+        echo -e "\e[0;32m===================================\e[0m"
+        dc=`ssh -i ${KEYPAIR} cloud-user@${EMP} "(grep COM_INF_LDAP_ROOT_SUFFIX /ericsson/tor/data/global.properties | cut -d '=' -f 2-)"`
+        ssh -i ${KEYPAIR} cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i ${KEYPAIR} cloud-user@${opendj} "\""/ericsson/opendj/opendj/bin/dsreplication status --baseDN ${dc} --adminUID repadmin --adminPassword Idapadmin --hostname ${opendj} --port 4444 -X -n"\""" | sed "s/^/\t/g"
+    }
+
+elasticsearch_rejected_index_count(){
+        echo
+        echo -e "\e[0;32mCount of Elastic Search rejected indexes:\e[0m"
+        echo -e "\e[0;32m=========================================\e[0m"
+        ssh -i ${KEYPAIR} cloud-user@${EMP} 'curl -XGET "elasticsearch:9200/_cat/thread_pool?v&h=host,ip,index.active,index.queue,index.rejected" | sed "s/^/\t/g"'
+}
+
+kpi_overview(){
+        echo
+        echo -e "\e[0;32mOverview of Active Node & Cell Level KPIs (18 cell level and 7 EnodeB level KPIs with 4000 nodes each):\e[0m"
+        echo -e "\e[0;32m=======================================================================================================\e[0m"
+        echo -e "\e[1;35mKPISERV Instance\t numberOf_activeNodeLevelKPI \t avgNumberOfNodes_activeNodeLevelKPI \t numberOf_activeCellLevelKPI \t avgNumberOfNodes_activeCellLevelKPI\e[0m" | sed 's/^/\t/g'
+        for i in `ssh -i ${KEYPAIR} cloud-user@${EMP} 'ls /var/ericsson/ddc_data/ | grep kpiserv'`;
+            do
+				echo -ne "$i\t\t\t";echo -n $(ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP "cat /var/ericsson/ddc_data/$i/$(date +%d%m%y)/instr.txt | grep KpiSpecificationServiceMetric |tail -1 | awk '{print \$(NF)}'")
+				echo -ne "\t\t\t\t";echo -n $(ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP "cat /var/ericsson/ddc_data/$i/$(date +%d%m%y)/instr.txt | grep KpiSpecificationServiceMetric |tail -1 | awk '{print \$(NF-42)}'")
+				echo -ne "\t\t\t\t";echo -n $(ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP "cat /var/ericsson/ddc_data/$i/$(date +%d%m%y)/instr.txt | grep KpiSpecificationServiceMetric |tail -1 | awk '{print \$(NF-1)}'")
+				echo -ne "\t\t\t\t";ssh -i /var/tmp/enm_keypair.pem cloud-user@$EMP "cat /var/ericsson/ddc_data/$i/$(date +%d%m%y)/instr.txt | grep KpiSpecificationServiceMetric |tail -1 | awk '{print \$(NF-43)}'"
+            done | sed 's/^/\t/g'
+}
+
+
+user_info(){
+        echo
+        echo -e "\e[0;32mUser Information:\e[0m"
+        echo -e "\e[0;32m=================\e[0m"
+        echo -e "\e[0;35mNumber of Users:\e[0m" | sed "s/^/\t/g"
+        ${user_mgr} list | grep "NUMBER OF USERS LISTED" | sed "s/^/\t/g"
+#        echo ""
+#        echo -e "\e[0;35mBreakdown of Users created:\e[0m" | sed "s/^/\t/g"
+#        ${user_mgr} list --limit=all | egrep "Administrator|Operator"| awk -F "_" '{print $1,$2}' | uniq -c | sort -nk1 | sed "s/^/\t/g"
+}
+
+echo
+date
+echo
+echo "COMMENCING RV DAILY CHECKS RUN:"
+echo "==============================="
+check_ddp_mountpoint
+enm_baseline
+torutils_info
+cm_node_numbers
+cm_network_status
+network_status_check
+cm_network_cell_count
+cm_list_unsynched_nodes
+cm_unsynched_nodes_by_type
+mo_numbers
+neo4j_status
+neo_leader_moves
+neo4j_GC
+neo4j_info
+service_reg_status
+#netsim_stopped_nodes
+consul_left_instances
+consul_members_count
+consul_member_events
+nfs_volume_sizes
+postgres_checks
+opendj_replication_status
+cm_configs
+cm_import_status
+cm_activations_status
+cm_export_status
+cm_cm_nbi
+cm_solr
+user_info
+elasticsearch_rejected_index_count
+list_thread_dumps
+fm_node_status
+fm_hb_failure
+fm_enm_alarms
+fm_alarm_count
+fm_nbi
+fmx_checks
+pm_nbi
+pm_stats
+rollback_transactions
+shm_info
+kpi_overview
+#queues_hanging
+workload_status
+workload_errored_nodes
+echo
+date
+echo
+
+#REST call to get private key:
+#wget -q -O - --no-check-certificate "https://atvdit.athtem.eei.ericsson.se/api/deployments/?q=name=ieatenmpd102" | awk -F',' '{print $6}'|awk -F "\":\"" '{print $2}' | grep -oP ".*END RSA PRIVATE KEY-----"
+#fm_nbi
+#Calculate # alarms sent from fm_01, 02 & 03 in a given day.
+
+#/ericsson/3pp/neo4j/bin/cypher-shell -u neo4j -p Neo4jadmin123 -a 10.10.0.146:7687 'call dbms.queryJmx("org.neo4j:instance=kernel#0,name=Transactions") yield attributes'
+#For above cmd: ssh -i /var/tmp/enm_keypair.pem cloud-user@${EMP} "ssh -o StrictHostKeyChecking=no -i /var/tmp/enm_keypair.pem cloud-user@ieatenmpd102-neo4j-0 'source /ericsson/3pp/neo4j/conf/neo4j_env;/ericsson/3pp/neo4j/bin/cypher-shell -u neo4j -p Neo4jadmin123 -a 10.10.0.146:7687 '\''call dbms.queryJmx("\""org.neo4j:instance=kernel#0,name=Transactions"\"") yield attributes'\'''"
+
+#CPP (DU RadioNodes, RBS, MGW, RNC) & COM/ECIM (SGSN-MME, EPG, MTAS, Baseband RadioNodes) node numbers
+#cli_app 'cmedit get * CppConnectivityInformation.ipAddress -cn'
+#cli_app 'cmedit get * ComConnectivityInformation.ipAddress -cn'
+#cli_app 'cmedit get * Er6000ConnectivityInformation.ipAddress -cn'
+
+
+#for i in {cmsync_01,cmsync_02,cmsync_03,cmsync_04,cmsync_05,cmsync_06}; do echo $i; workload list all --profiles $i | grep LTE | awk '{print $1}' | cut -c6-11|uniq -c | sort -nk2;done
+# workload list all | grep -i error -B2 | egrep -i "LTE|SGSN|RNC[0-9][0-9] |[0-9]RBS[0-9]" | awk '{print $1}' | cut -c6-11|sort | uniq -c | sort -nk2
+
+#Check for profiles that are running
+#workload diff | awk {'print $1" "$2" "$4'}
+
+#Check for profiles that are not running but that are supported to some degree
+#workload diff --no-ansi  | awk '$2=="NO"' | awk '$4!="NO"' | awk {'print $1" "$4'}
+
+#Backup Info - Displaying the stats for the backups with Keyword:  ENM_ieatlms6370-bkup1_20170512000136
+#[root@ieatrcxb6446-bkup:/] # /ericsson/jobs_parser.bsh -k ENM_ieatlms6370-bkup1_20170512000136
+
+#Check alarm clearing rates and count
+# sshvm svc-2-fmhistory `egrep "Active Alarms are present|acknowledging all cleared|The number of  cleared alarms" /ericsson/3pp/jboss/standalone/log/server.log | tail -50 | awk '{$3=$4=$5=$6=$7=$8=""}1'`
+
+#/opt/ericsson/elasticsearch/elasticsearch_admin.py
+
+# STKPI results
+
+
+# grep find_system_errors.py /var/log/messages | grep ERROR | grep "$(date +%b" "%d)" | sed 's/\\n\\tat/\n/g'
+# zgrep "has reached maximum delivery attempts" /net/${ddpsite}/data/stats/tor/LMI_vENM001/analysis/271017/enmlogs/*csv.gz| awk '{print $NF}' | sort | uniq -c | sort -nrk1
+
+# cli_app 'cmedit export -st'|grep -i CMEXPORT_11 | awk '{print $4}' | awk -F ":" '{print $1}'|uniq -c
+
+#AMOS
+#cm_amos_sessions
+#[00:22:48 root@ieatwlvm6070:workload_vm_rv_dailychecks ]# grep "Successfully connected amos to node" /var/log/enmutils/daemon/amos_0*.log | grep 2017-10-27 -c
+#3485
+#[00:23:09 root@ieatwlvm6070:workload_vm_rv_dailychecks ]# grep "Unsuccessfully created socket to AMOS KVM for user" /var/log/enmutils/daemon/amos_0*.log | grep 2017-10-27 -c
+#316
+
+#cmexport_11 Checks:
+#for j in {21,22}; do for i in {01,09,13,21}; do echo -n "Time: 2017-11-$j $i:40: "; grep "2017-11-$j $i" /var/log/enmutils/daemon/cmexport_11.log|grep -c "Successfully exported nodes";done;done
+
+
+#Access VMS and get list of hosts
+#ssh vms 'ssh -t -t -i /vol1/senm/etc/key_pair_vio_5661.pem cloud-user@vnflaf-services "exec sudo -i " consul members list'
+
+#How to log into another VM, swithc to root user, run a command and then log out:
+#[11:08:29 root@ieatwlvm7040:~ ]# ssh -t -t -i /var/tmp/enm_keypair.pem cloud-user@131.160.191.101 "exec sudo -i" uptime
+#[10:49:11 root@ieatwlvm7040:enmlogs ]# ssh -i /var/tmp/enm_keypair.pem cloud-user@131.160.191.101 'ssh -t -t -i /var/tmp/enm_keypair.pem cloud-user@10.10.3.23'
+[10:47:30 root@ieatwlvm7040:enmlogs ]# ssh -i /var/tmp/enm_keypair.pem cloud-user@131.160.191.101 'ssh -t -t -i /var/tmp/enm_keypair.pem cloud-user@10.10.3.23' uptime
+
+
+#Get SED from DIT where id is the id of the SED document
+#curl -X GET "https://atvdit.athtem.eei.ericsson.se/api/documents?q=_id%3D5cc6cac2139ad6f66e54f3c6" -H "accept: application/json"|sed 's/,/\n/g'
+
+#Checking SAM logs:
+#[cloud-user@vio-5661-vnflaf-services-0 ~]$ ssh -i /var/tmp/enm_keypair.pem cloud-user@10.10.3.128 'grep -v "failed state: 0" /var/log/simple_availability_manager/sam.log | tail -20'
+
+
+#/ericsson/enm/dumps/*.jfr files

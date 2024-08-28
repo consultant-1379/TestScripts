@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="MeasDataCollection.xsl"?>
+<!DOCTYPE mdc SYSTEM "MeasDataCollection.dtd">
+<mdc xmlns:HTML="http://www.w3.org/TR/REC-xml">
+<!-- /opt/ericsson/nms_umts_wranmom/dat/RNC_NODE_MODEL_vV_4_3202_X_1_9.xml template_config_files/type_7_RNC_NODE_MODEL_vV_4_3202_X_1_9.xml.cfg Wed Apr 13 07:58:18 IST 2016 -->
+<mfh>
+<ffv>1</ffv>
+<sn></sn>
+<st></st>
+<vn></vn>
+<cbt>startdate</cbt>
+</mfh>
+<md>
+<!-- Padding to make up for empty neun/nedn fields    -->
+<neid>
+<neun></neun>
+<nedn></nedn>
+</neid>
+<mi>
+<mts>stopdate</mts>
+<gp>900</gp>
+<mt>pmBwErrBlocks</mt>
+<mt>pmBwLostCells</mt>
+<mt>pmBwMissinsCells</mt>
+<mt>pmFwErrBlocks</mt>
+<mt>pmFwLostCells</mt>
+<mt>pmFwMissinsCells</mt>
+<mt>pmLostBrCells</mt>
+<mt>pmLostFpmCells</mt>
+<mv>
+<moid>ManagedElement=1,TransportNetwork=1,Aal0TpVccTp=1</moid>
+<r>0</r>
+<r>0</r>
+<r>0</r>
+<r>0</r>
+<r>0</r>
+<r>0</r>
+<r>0</r>
+<r>0</r>
+</mv>
+</mi>
+</md>
+<mff><ts>stopdate</ts></mff>
+</mdc>

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+BLADES=$(/opt/ericsson/enminst/bin/vcs.bsh --systems | grep ie | awk '{print $1}')
+cp /root/rvb/bin/set_high_performance.bsh /ericsson/enm/dumps/set_high_performance.bsh
+chmod 755 /ericsson/enm/dumps/set_high_performance.bsh
+echo "set on LMS"
+/ericsson/enm/dumps/set_high_performance.bsh
+echo "set on BLADES"
+for i in ${BLADES}
+do
+    /root/rvb/bin/ssh_to_vm_and_su_root.exp $i "/ericsson/enm/dumps/set_high_performance.bsh"
+done

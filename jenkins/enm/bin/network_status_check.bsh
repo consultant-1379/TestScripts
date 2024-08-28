@@ -1,0 +1,154 @@
+#!/bin/bash
+# ********************************************************************
+# Name    : network_status_check.bsh
+# Date    : 20/10/2017
+# Revision: A9
+# Purpose : To check the status of network elements on an ENM deployment
+#
+# Usage   : network_status_check.bsh [node_type]
+#                       e.g. network_status_check.bsh                                   -> will run the script for all node types that are available on the ENM system
+#                   e.g. network_status_check.bsh ERBS RadioNode    -> will run the script and only check for ERBS and RadioNodes
+#
+# 08/11/16 Rev A:  Original version
+# 09/11/16 Rev A2: Addition of SL2 check
+# 09/11/16 Rev A3: Changed to run using temp files instead of multiple cli_app commands
+# 10/11/16 Rev A4: Added CmNodeHeartbeatSupervision check to the list
+# 14/11/16 Rev A5: Added functionality to check specified node types from command line input
+# 23/05/17 Rev A6: Added help/usage output for the script
+# 30/08/17 Rev A8: Removed SHM Supervision from output and added in EUtrancell count info
+# 20/10/17 Rev A9: Added SHM Supervision back into the output
+#
+# *******************************************************************
+
+AWK=/bin/awk
+CAT=/bin/cat
+CLI_APP=/opt/ericsson/enmutils/bin/cli_app
+ECHO=/bin/echo
+EGREP=/bin/egrep
+GREP=/bin/grep
+MKDIR=/bin/mkdir
+PRINTF=/usr/bin/printf
+RM=/bin/rm
+SORT=/bin/sort
+TAIL=/usr/bin/tail
+WC=/usr/bin/wc
+
+# Formatting for output
+normal=$(printf "\033[m")
+bold=$(printf "\033[1m")
+blue=$(printf "\033[01;34m")
+green=$(printf "\033[01;32m")
+bold_line=0
+table_line_for_print="----------------------------------------------------------------------------------------------------------------------------"
+
+#---------------------------------------------------------------------------------------------------------
+
+if [ "$1" = "-h" -o "$1" = "--h" -o "$1" = "-help" -o "$1" = "--help" ]
+then
+        # Help output to be printed if any of the following are entered: -h, --h, -help or --help
+        $ECHO ""
+        $ECHO "Script to check the status of network elements on an ENM deployment."
+        $ECHO "Will check CM Supervised, CM Heartbeat, CM Sync, FM Supervised, PM Enabled, SHM sync and SL2 status."
+        $ECHO ""
+        $ECHO "Usage   : #./network_status_check.bsh [-h|--h|-help|--help]:  --->  Prints this help/usage information for this script"
+        $ECHO ""
+        $ECHO "Usage   : #./network_status_check.bsh [node_type]  --->  will run the script and only check for the nodes entered"
+        $ECHO " "
+        $ECHO "          To check multiple nodes, separate using a space:"
+        $ECHO "          e.g. #./network_status_check.bsh ERBS RadioNode  ---> will run the script and only check for ERBS and RadioNodes"
+        $ECHO ""
+        $ECHO "Usage   : #./network_status_check.bsh  --->  will run the script for all node types that are available on the ENM system"
+        $ECHO "          e.g. #./network_status_check.bsh   ---> will run the script and only check for ERBS and RadioNodes"
+        $ECHO "          Note: This command may take a while as it looks for al the different nodes types on the system"
+        $ECHO ""
+        exit
+fi
+
+
+if [ "$1" = "" ]
+then
+        # Getting the various node types that are in the system
+        nodes_in_system=( `$CLI_APP "cmedit get * networkelement.netype" | $GREP neType | $SORT -u | $AWK '{print $3}'` )
+else
+        # Getting specified nodes from user input from command line
+        nodes_in_system=( "$@" )
+fi
+
+
+# Totals values
+total_nodes_cm_supervised=0
+total_nodes_cm_heartbeat=0
+total_nodes_cm_sync=0
+total_nodes_fm_supervised=0
+total_nodes_pm_enabled=0
+total_nodes_shm_sync=0
+total_cells=0
+total_nodes_at_sl2=0
+
+# Getting current location
+location=`dirname "$0"`
+
+# Creating directory for temp_files, deleting if there already to remove files from any previous failed run
+if [ -d $location/.temp_files_net_check ]
+        then
+                `$RM -fr $location/.temp_files_net_check`
+                `$MKDIR $location/.temp_files_net_check`
+        else
+                `$MKDIR $location/.temp_files_net_check`
+fi
+
+$ECHO $table_line_for_print
+$PRINTF "$blue%-18s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | $normal\n" "Node Type" "CM Func" "CM HeartBt" "CM Sync" "FM SuperV" "PM Enabled" "# Cells" "SHM Sync" "SL2"
+$ECHO $table_line_for_print
+
+
+#while read node_type; do
+for node_type in "${nodes_in_system[@]}"
+do
+
+        #Making alternate lines bold in the output
+        if [ $bold_line = 0 ]
+                then
+                        formatting=$normal
+                        bold_line=1
+                else
+                        formatting=$blue
+                        bold_line=0
+        fi
+
+
+        # Getting all needed information for each nodes type and adding to a file for that node type
+        $CLI_APP "cmedit get * CmFunction;CmFunction.syncStatus==SYNCHRONIZED;CmNodeHeartbeatSupervision.active==true;FmAlarmSupervision.active==true;PmFunction.pmEnabled==true;UtranCell;EUtranCellFDD;InventoryFunction.syncStatus==SYNCHRONIZED;security.operationalSecurityLevel -ne=$node_type" > $location/.temp_files_net_check/$node_type
+
+        # Separating out the needed information from the node type file
+        nodes_cm_supervised=`$CAT $location/.temp_files_net_check/$node_type | $GREP CmFunction=1 | $SORT -u | $WC -l`
+        nodes_cm_heartbeat=`$CAT $location/.temp_files_net_check/$node_type | $GREP -A1 CmNodeHeartbeatSupervision | $GREP "active : true" | $WC -l`
+        nodes_cm_sync=`$CAT $location/.temp_files_net_check/$node_type | $GREP -A1 CmFunction=1 | $GREP "syncStatus : SYNCHRONIZED" | $WC -l`
+        nodes_fm_supervised=`$CAT $location/.temp_files_net_check/$node_type | $GREP -A1 FmAlarmSupervision=1 | $GREP "active : true" | $WC -l`
+        nodes_pm_enabled=`$CAT $location/.temp_files_net_check/$node_type | $GREP -A1 PmFunction=1 | $GREP "pmEnabled : true" | wc -l`
+        nodes_cells=`$CAT $location/.temp_files_net_check/$node_type | $EGREP -c "UtranCell" `
+		nodes_shm_sync=`$CAT $location/.temp_files_net_check/$node_type | $GREP -A1 "SHMFunction=1,InventoryFunction=1" | $GREP "syncStatus : SYNCHRONIZED" | $WC -l`
+        nodes_at_sl2=`$CAT $location/.temp_files_net_check/$node_type | $GREP -A1 "Security=1" | $GREP "operationalSecurityLevel : LEVEL_2" | $WC -l`
+
+        $PRINTF "$formatting%-18s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s |$normal" $node_type $nodes_cm_supervised $nodes_cm_heartbeat $nodes_cm_sync $nodes_fm_supervised $nodes_pm_enabled $nodes_cells $nodes_shm_sync $nodes_at_sl2
+
+        $ECHO -e "\n$table_line_for_print"
+
+        # Getting the totals for each column
+        total_nodes_cm_supervised=$(($total_nodes_cm_supervised + $nodes_cm_supervised))
+        total_nodes_cm_heartbeat=$(($total_nodes_cm_heartbeat + $nodes_cm_heartbeat))
+        total_nodes_cm_sync=$(($total_nodes_cm_sync + $nodes_cm_sync))
+        total_nodes_fm_supervised=$(($total_nodes_fm_supervised + $nodes_fm_supervised))
+        total_nodes_pm_enabled=$(($total_nodes_pm_enabled + $nodes_pm_enabled))
+        total_cells=$(($total_cells + $nodes_cells))
+		total_nodes_shm_sync=$(($total_nodes_shm_sync + $nodes_shm_sync))
+        total_nodes_at_sl2=$(($total_nodes_at_sl2 + $nodes_at_sl2))
+
+# End of for loop through the array of node types
+done
+
+# Removing temp directory, including any files in the directory
+$RM -fr $location/.temp_files_net_check
+
+$PRINTF "$green%-18s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s | %-10s |$normal" "Total" $total_nodes_cm_supervised $total_nodes_cm_heartbeat $total_nodes_cm_sync $total_nodes_fm_supervised $total_nodes_pm_enabled $total_cells $total_nodes_shm_sync $total_nodes_at_sl2
+$ECHO -e "\n$table_line_for_print\n"

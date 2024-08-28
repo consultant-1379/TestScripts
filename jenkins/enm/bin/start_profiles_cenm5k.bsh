@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# script to start all supported profiles for 5k cENM
+
+/opt/ericsson/enmutils/bin/workload start APT_01 --conf /opt/ericsson/enmutils/etc/stkpi_config.py
+
+/opt/ericsson/enmutils/bin/workload start HA_01,CMIMPORT_14,CMIMPORT_02,CMIMPORT_04
+
+/opt/ericsson/enmutils/bin/workload stop -r HA_01
+
+/opt/ericsson/enmutils/bin/workload start AP_SETUP,SHM_SETUP,NHM_SETUP,NETVIEW_SETUP,FM_0506,CMSYNC_SETUP
+
+/opt/ericsson/enmutils/bin/workload start -c pm --ignore PM_66,PM_69,PM_70,PM_75,PM_82,PM_83,PM_86,PM_87,PM_88,PM_89,PM_90,PM_91,PM_92,PM_93,PM_96
+
+/opt/ericsson/enmutils/bin/workload start -c ap
+
+/opt/ericsson/enmutils/bin/workload start -c cli_mon
+
+/opt/ericsson/enmutils/bin/workload start -c cmexport --ignore cmexport_14,cmexport_23,cmexport_25,CMEXPORT_24
+
+/opt/ericsson/enmutils/bin/workload start -c cmimport
+
+/opt/ericsson/enmutils/bin/workload start -c cmsync --ignore CMSYNC_23,CMSYNC_28,CMSYNC_37,CMSYNC_38
+
+/opt/ericsson/enmutils/bin/workload start -c enmcli
+
+/opt/ericsson/enmutils/bin/workload start -c fm --ignore fm_30
+
+/opt/ericsson/enmutils/bin/workload start -c launcher
+
+/opt/ericsson/enmutils/bin/workload start -c logviewer
+
+/opt/ericsson/enmutils/bin/workload start -c netex --ignore netex_04,netex_05,netex_07
+
+/opt/ericsson/enmutils/bin/workload start -c netview
+
+/opt/ericsson/enmutils/bin/workload start -c plm
+
+/opt/ericsson/enmutils/bin/workload start -c nhc
+
+/opt/ericsson/enmutils/bin/workload start -c nhm --ignore nhm_13
+
+/opt/ericsson/enmutils/bin/workload start -c nodecli
+
+/opt/ericsson/enmutils/bin/workload start -c nodesec
+
+/opt/ericsson/enmutils/bin/workload start -c parmgt
+
+/opt/ericsson/enmutils/bin/workload start -c secui
+
+/opt/ericsson/enmutils/bin/workload start -c shm --ignore shm_40,shm_41,shm_42,shm_43
+
+/opt/ericsson/enmutils/bin/workload start -c doc
+
+/opt/ericsson/enmutils/bin/workload start -c top
+
+/opt/ericsson/enmutils/bin/workload start -c asu
+
+/opt/ericsson/enmutils/bin/workload start -c PKIADMIN
+
+/opt/ericsson/enmutils/bin/workload start -c ftpes --ignore FTPES_01
+
+/opt/ericsson/enmutils/bin/workload start -c CMEVENTS_NBI
+
+/opt/ericsson/enmutils/bin/workload start -c amos

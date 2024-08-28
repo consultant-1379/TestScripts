@@ -1,0 +1,462 @@
+#!/usr/bin/bash
+#Author: Harri Miettinen
+#Date: 9.10.2015
+#Purpose: This script will handle all the prerequisites for BUR and handles the backup and restore.
+
+#TODO: implement the deployment.conf and check that cluster id is provided as parameter
+
+#VARIABLES
+BRSADM_PASS=RV8_urpwd
+LMS=ieatlms3841-bkp1
+LMSHOST=ieatlms3841
+LMS_PASS=12shroot
+INPUTFILE=/var/tmp/${LMS}.conf
+KEYWORD=`/usr/openv/netbackup/bin/admincmd/bpimagelist -L -client ${LMS} -d 01/01/1900 | grep Keyword: | grep ${LMS} | uniq | cut -d ":" -f2 | awk '{print $1}'`
+BOOT_MEDIA_NBR=1
+ILO_USER=root
+ILO_PASS=shroot12
+ENM_POOL=ENM330-pool
+OMBS=10.144.1.97
+OMBS_PASS=shroot
+LOGFILE=/tmp/expect.log
+#Below variables are for deleting old backups.
+BPIMAGELIST=/usr/openv/netbackup/bin/admincmd/bpimagelist
+BPEXPDATE=/usr/openv/netbackup/bin/admincmd/bpexpdate
+POLICY1=ENM_USERDEFINED_ieatlms3841-bkp1
+POLICY2=ENM_SCHEDULED_ieatlms3841-bkp1
+BP_CONF=/usr/openv/netbackup/bp.conf.330
+
+
+
+
+#FUNCTIONS
+#create_policy()
+#This function will check if the storage unit exists before creating the backup policy
+create_policy() {
+echo "Checking that storage unit is configured"
+STORUNIT=`/ericsson/ombss_enm/bin/ombss_enm -a stu -l | grep ombs_enm_basic_stu-0 | awk '{print $1}'`
+if [ -z ${STORUNIT} ];then
+        echo "Storage unit not configured please follow the BUR SAG Section 2 to create it"
+        exit 1
+fi
+
+#Create the backup policy
+echo "Creating backup policies"
+/usr/local/bin/expect <<EOF
+set timeout 600
+log_user 1
+        spawn /usr/bin/bash -c "/ericsson/ombss_enm/bin/ombss_enm -a policy -c -M ${LMS} -s ${STORUNIT}"
+        expect {
+                "Enter Initial PASSWD for brsadm in*" {
+                send "${BRSADM_PASS}\r"
+                }
+        }
+        expect {
+                "Re-enter the Initial PASSWD for brsadm in*" {
+                send "${BRSADM_PASS}\r"
+                }
+        }
+        expect {
+                "Do you want to continue (y/n)*" {
+                send "y\r"
+        }
+        expect {
+                "# " {
+                send "exit\r"
+                }
+        }
+EOF
+
+#Update backup clients
+echo "Updating backup clients"
+/usr/local/bin/expect <<EOF
+set timeout 600
+log_user 1
+        spawn /usr/bin/bash -c "/ericsson/ombss_enm/bin/ombss_enm -a client -U -M ${LMS}"
+	expect {
+                "Enter current PASSWD for brsadm in ieatlms3841-bkp1:*" {
+                send "${BRSADM_PASS}\r"
+                exp_continue
+                }
+        expect {
+                "# " {
+                send "exit\r"
+                }
+        }
+EOF
+}
+
+#createBackup()
+#This will launch the backup script
+createBackup() {
+	echo "Starting backup at `date`"
+
+    #Get the user defined policy name
+    POLICY=`/usr/openv/netbackup/bin/admincmd/bppllist | grep "ENM_SCHEDULED_${LMS}"`
+
+	#activate backup policy before backup
+        echo "Activating backup policy"
+        if [ -n $POLICY ]; then
+                /usr/openv/netbackup/bin/admincmd/bpplinfo ${POLICY} -modify -active
+        else
+                echo "Can't find backup policy named ${POLICY}"
+                exit 1
+        fi
+	
+	#set the keyword date. This keyword does not map to MS command so leave keyword out of the backup call
+	#KEYDATE=ENM_${LMS}_`date +"%Y%m%d%H%M%S"`
+	
+	#Execute the backup
+	echo "Executing backup command"
+        #/usr/openv/netbackup/bin/bpbackup -p ${POLICY} -i -h ${LMS} -s ENM_Full_Backup -k ${KEYDATE}
+        /usr/openv/netbackup/bin/bpbackup -p ${POLICY} -i -h ${LMS} -s ENM_Full_Backup
+
+        #sleep 600 seconds to be sure snapshots are done
+        sleep 600
+
+        while [ `/usr/openv/netbackup/bin/admincmd/bpdbjobs -summary -L | grep Active | awk '{print $2}'` != "0" ] ||
+              [ `/usr/openv/netbackup/bin/admincmd/bpdbjobs -summary -L | grep Queued | awk '{print $2}'` != "0" ]
+        do
+                echo "Backup still running"
+                sleep 60
+        done
+	
+	#Verify that there is a backup created and the keyword does not exist in /opt/ericsson/itpf/bur/data/FAILED_BACKUPS_KEYS on LMS
+	_STATUS=`ssh brsadm@${LMS} '[[ -f /opt/ericsson/itpf/bur/data/FAILED_BACKUPS_KEYS ]]; echo $?'`
+	if [ "$_STATUS" == "0" ];then
+	    echo "There seems to be issue with the backup."
+	    exit 1
+	fi
+
+    #Backup completed
+    echo "Backup completed at `date`"
+
+    #GET backup stats to jenkins logs
+    echo -e "\nGenerating stats from the backup.\nStat from whole backup:"
+    /var/tmp/bur/jobs_parser.bsh -k `/usr/openv/netbackup/bin/admincmd/bpimagelist -L -client ${LMS} -d 01/01/1900 | grep Keyword: | sort -u | tail -1 | awk '{print $2}'`
+
+    echo -e "\nStats from all the clients:\n"
+    /var/tmp/bur/jobs_parser.bsh -k `/usr/openv/netbackup/bin/admincmd/bpimagelist -L -client ${LMS} -d 01/01/1900 | grep Keyword: | sort -u | tail -1 | awk '{print $2}'` -c ALL
+}
+
+#autoRestore()
+#This will fill the template for automatic restore
+autoRestore() {
+	#get the policy name so it can be disabled before the restore
+	POLICY=`/usr/openv/netbackup/bin/admincmd/bppllist | grep "ENM_SCHEDULED_${LMS}"`
+
+	#Create conf file for automatic restore
+	echo "CLIENT_NAME=${LMS}" > ${INPUTFILE}
+	echo "KEYWORD=${KEYWORD}" >> ${INPUTFILE}
+	echo "BOOT_MEDIA_NBR=${BOOT_MEDIA_NBR}" >> ${INPUTFILE}
+	echo "ILO_USER=${ILO_USER}" >> ${INPUTFILE}
+	echo "ILO_PASS=${ILO_PASS}" >> ${INPUTFILE}
+	echo "BRSADM_PASSWORD=${BRSADM_PASS}" >> ${INPUTFILE}
+
+	#Disable backup policy before restore
+	echo "Disabling backup policy"
+	if [ -n $POLICY ]; then
+        	#Disable policy
+        	/usr/openv/netbackup/bin/admincmd/bpplinfo ${POLICY} -modify -inactive
+	fi
+	
+	#We need to remove /.ssh/known_hosts otherwise auto restore won't work
+        rm -f /.ssh/known_hosts
+
+    #Check that dhcp server is online on OMBS
+    if [ "`svcs -a | grep dhcp-server | awk '{print $1}'`" == "maintenance" ];then
+        svcadm clear dhcp-server
+    elif [ "`svcs -a | grep dhcp-server | awk '{print $1}'`" == "disabled" ];then
+        svcadm enable grep dhcp-server
+    fi
+
+    #Remove PXE boot macro from ITTE DHCP server to prevent initial installation.
+    #By default they remove all macros every night but if you run BUR on same day it will use the
+    #ITTE server for PXE boot instead of OMBS
+    #echo "Removing dhcp macro from ITTE DHCP Server if exists..."
+#/usr/local/bin/expect <<EOF
+#set timeout 20
+#log_user 1
+#    spawn /bin/sh -c "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ServerAliveInterval=30 root@159.107.173.209 /usr/sbin/dhtadm -D -m A0D3C1EF85D0"
+#	expect {
+#                -re ".*sword.*" {
+#                send "shroot12\r"
+#                }
+#        }
+#	expect {
+#		"#.*" {
+#		send "eof\r"
+#		}
+#	}
+#EOF
+
+
+	if [ -f $INPUTFILE ];then
+        	#start restore and provide the LMS password
+		    echo "Starting the restore"
+        	/ericsson/ombss_enm/bin/ros -N ${INPUTFILE} --restore_type=full -q
+	else
+            echo "There was a problem with $INPUTFILE"
+	fi
+
+}
+
+#getSW()
+#This will pull the latest BUR software from LMS and extract it to /ericsson
+getSW() {
+echo "Deleting old SW from OMBS"
+rm -f /ericsson/ERICbackuprestoreserviceombs_CXP9031432-*
+rm -rf /ericsson/ombss_enm/
+
+echo "Fetchinng latest SW from LMS"
+/usr/local/bin/expect <<EOF
+set timeout 20
+log_user 1
+	spawn /bin/sh -c "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${LMS}:/home/brsadm/ERICbackuprestoreserviceombs_CXP9031432-*.tar.gz /ericsson"
+	expect {
+                -re ".*sword.*" {
+                send "$LMS_PASS\r"
+                }
+        }
+	expect {
+		"#.*" {
+		send "eof\r"
+		}
+	}
+EOF
+	cd /ericsson
+	gunzip -c /ericsson/ERICbackuprestoreserviceombs_CXP9031432-*.tar.gz | tar xvf -
+	rm -f /ericsson/ERICbackuprestoreserviceombs_CXP9031432-*.tar.gz
+
+	#Because of shared OMBS we need to copy the bp.conf template so that restore will work correctly
+	if [ -f ${BP_CONF} ];then
+	    echo "Copying ${BP_CONF} template to bp.conf ..."
+	    cp ${BP_CONF} /usr/openv/netbackup/bp.conf
+	else
+	    echo "Could not find ${BP_CONF}"
+	fi
+}
+
+#manageLMS()
+#This will perform the prerequisites on LMS. Comment out entry from sshd_config, create change in litp model to activate "live" backup for fs_pm1
+manageLMS() {
+echo "Executing LMS pre-requisites"
+#remove know_hosts
+rm -f /.ssh/known_hosts
+
+/usr/local/bin/expect <<EOF
+set timeout 300
+log_user 1
+        spawn /usr/bin/bash -c "ssh -q -o StrictHostKeyChecking=no root@${LMS}"
+        expect {
+                -re ".*sword.*" {
+                send "$LMS_PASS\r"
+                }
+        }
+        expect {
+                "# " {
+                send "rm -f /etc/ssh/sshd_config.`date +'%d%m%Y'`; cp -p /etc/ssh/sshd_config /etc/ssh/sshd_config.`date +'%d%m%Y'`\r"
+                }
+        }
+        expect {
+                "# " {
+                send "sed -i '/LC_MESSAGES/s/^/#/' /etc/ssh/sshd_config\r"
+                }
+        }
+        expect {
+                "# " {
+                send "exit\r"
+                }
+        }
+EOF
+}
+
+
+
+#copy_sshkeys()
+#This will create passwordless root access towards OMBS
+copy_sshkeys() {
+echo "Copying ssh key over to OMBS"
+/usr/bin/expect <<EOF
+set timeout 30
+log_user 1
+        spawn /bin/bash -c "cat ~/.ssh/id_rsa.pub | ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${OMBS} 'rm -f /.ssh/authorized_keys && cat >> /.ssh/authorized_keys'"
+        expect {
+                -re ".*#.* " {
+                send "echo\r"
+                exp_continue
+                }
+                -re ".*sword.*" {
+                send "$OMBS_PASS\n"
+                exp_continue
+                }
+        }
+EOF
+echo "copying latest version of manageBUR.bsh to OMBS"
+scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null jenkins/enm/bur/ root@${OMBS}:/var/tmp
+}
+
+#teardown()
+#This will clean LMS before restore
+teardown() {
+	echo "Cleaning ENM filesystems and shares"
+
+/usr/local/bin/expect <<EOF
+set timeout 20
+log_user 1
+log_file $LOGFILE
+        spawn /usr/bin/bash -c "ssh -q -o StrictHostKeyChecking=no root@${LMS} 'find /var/tmp/ -name "MASTER_siteEngineering.txt*"'"
+        expect {
+                -re ".*sword.*" {
+                send "$LMS_PASS\r"
+                }
+        }
+        expect eof
+EOF
+#parse sed info from output
+_SED=`cat /tmp/expect.log | grep "MASTER" | awk '{print $3}'`
+
+#Incase there is no sed skip this
+if [ ! -z ${_SED} ];then
+/usr/local/bin/expect <<EOF
+set timeout 1800
+log_user 1
+        spawn /usr/bin/bash -c "ssh -q -o StrictHostKeyChecking=no root@${LMS} '/opt/ericsson/enminst/bin/teardown.sh -y --sed=$_SED --command=clean_all'"
+        expect {
+                -re ".*sword.*" {
+                send "$LMS_PASS\r"
+                }
+        }
+        expect eof
+EOF
+else
+    echo "No SED file found. Skipping teardown..."
+fi
+
+#remove log
+rm -f $LOGFILE
+}
+
+#List all backups and expire them
+expire_backup() {
+echo "Cleaning any old backup for the deployment"
+
+#start date can be anything in the past
+STARTDATE="01/01/2014 00:00:00"
+ENDDATE=`date +"%m/%d/%Y %H:%M:%S"`
+
+#Let's create list of policies ID's based on the policy name. This will prevent us to delete any other backups there might be
+$BPIMAGELIST -idonly -d $STARTDATE -e $ENDDATE -policy ${POLICY1}| awk '{print $8}' > /tmp/bpexpdate.list
+$BPIMAGELIST -idonly -d $STARTDATE -e $ENDDATE -policy ${POLICY2}| awk '{print $8}' >> /tmp/bpexpdate.list
+
+for BKUP in `cat /tmp/bpexpdate.list`
+do
+        ${BPEXPDATE} -backupid $BKUP -d 0 -force
+done
+
+rm -f /tmp/bpexpdate.list
+
+}
+
+#createBaseImage()
+#This will update the base image
+createBaseImage() {
+echo "Creating the base image..."
+/ericsson/ombss_enm/bin/build_base_image.bsh ${LMS}
+
+#Verify that image was created by checking exit code
+if [ "$?" != "0" ];then
+        echo "Something went wrong with base image."
+        exit 1
+fi
+
+#Mount base image
+lofiadm -a /usr/openv/JUMP/BASE_IMAGE/LIN_RHEL_*_PXE_BOOT_MEDIA.iso
+LOFI=`lofiadm | grep LIN_RHEL_6.6_PXE_BOOT_MEDIA.iso | awk '{print $1}'`
+mkdir /tmp/lofi
+mount -F hsfs ${LOFI} /tmp/lofi
+/ericsson/jumpstart/bin/manage_linux_kickstart.bsh -a add -N -p /tmp/lofi
+umount /tmp/lofi
+lofiadm -d ${LOFI}
+rmdir /tmp/lofi
+echo "Base image successfully created."
+
+#get the base image printout to jenkisn logs
+/ericsson/jumpstart/bin/manage_linux_kickstart.bsh -a list
+
+}
+
+#removeBaseImage()
+#This wil remove old base image
+removeBaseImage() {
+echo "Removing old base image..."
+
+#Get the number of the base image to delete
+#There is some strange charachters when printing the output so using this complex method to extract the image number
+IMAGE=`/ericsson/jumpstart/bin/manage_linux_kickstart.bsh -a list | grep -w ${LMSHOST} | head -1 | cut -c8-11 | tr -cd [:digit:]`
+#IMAGE=`/ericsson/jumpstart/bin/manage_linux_kickstart.bsh -a list | grep -w ${LMSHOST} | head -1 | cut -c2`
+if [ -z ${IMAGE} ];then
+        echo "No matching base image found."
+else
+
+/usr/local/bin/expect <<EOF
+set timeout 60
+log_user 1
+        spawn /bin/sh -c "/ericsson/jumpstart/bin/manage_linux_kickstart.bsh -a remove"
+        expect {
+                -re "Select number of.*" {
+                send "${IMAGE}\r"
+                }
+        }
+        expect {
+                -re "Are you sure you wish.*" {
+                send "Yes\r"
+                sleep 10
+                }
+        }
+        expect {
+                -re "#.*" {
+                send "eof\r"
+                }
+        }
+EOF
+fi
+
+}
+
+
+#help()
+#This will print the available options
+help() {
+        echo "$0 [-manageLMS | -getSW | -create_policy | -createBackup | -teardown | -autoRestore | -copy_sshkeys | -expire_backup | -help]"
+        echo "   [-removeBaseImage | -createBaseImage]"
+}
+
+
+#MAIN
+case $1 in
+	"-create_policy")
+		create_policy ;;
+	"-createBackup")
+		createBackup ;;
+	"-autoRestore")
+		autoRestore ;;
+	"-getSW")
+		getSW ;;
+	"-manageLMS")
+		manageLMS ;;
+	"-copy_sshkeys")
+		copy_sshkeys ;;
+	"-teardown")
+	    teardown ;;
+	"-help")
+		help ;;
+	"-expire_backup")
+		expire_backup ;;
+	"-removeBaseImage")
+	    removeBaseImage ;;
+	"-createBaseImage")
+	    createBaseImage ;;
+	*)
+		help ;;
+esac

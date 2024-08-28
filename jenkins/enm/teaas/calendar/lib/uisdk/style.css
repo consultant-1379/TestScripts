@@ -1,0 +1,292 @@
+html, body {
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10px;
+  line-height: 10px;
+  color: #333333;
+  background-color: rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+p {
+  line-height: 1.2rem;
+  font-size: 1.2rem;
+}
+
+@font-face {
+  font-family: EricssonCapitalTT;
+  src: url('EricssonCapitalTT.ttf') format('truetype');
+}
+
+button::-moz-focus-inner,
+input[type="button"]::-moz-focus-inner,
+input[type="submit"]::-moz-focus-inner,
+input[type="reset"]::-moz-focus-inner {
+  padding: 0 !important;
+  border: 0 none !important;
+}
+
+.ebInput {
+  display: inline-block;
+  vertical-align: middle;
+  text-align: left;
+  font-size: 1.2rem;
+  width: 140px;
+  height: 2.4rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #b3b3b3;
+  -ms-box-sizing: border-box;
+  box-sizing: border-box;
+  border-radius: 3px;
+  box-shadow: inset 1px 1px 0 0 #cccccc;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  -ms-appearance: none;
+  appearance: none;
+}
+
+.eb_wMargin {
+  margin: 6px;
+}
+
+.ebBtn {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  color: #333333;
+  background-color: #ffffff;
+  border: none;
+  min-width: 60px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  -ms-box-sizing: border-box;
+  box-sizing: border-box;
+  padding: 0 8px;
+  line-height: 2.4rem;
+  height: 2.4rem;
+  font-size: 1.2rem;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.1) 100%);
+}
+
+.ebBtn > * {
+  vertical-align: middle;
+}
+
+.ebBtn:hover {
+  text-decoration: none;
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.15) 100%);
+}
+
+.ebBtn:active {
+  text-decoration: none;
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+.ebIcon {
+  display: inline-block;
+  vertical-align: middle;
+  border: none;
+  height: 16px;
+  width: 16px;
+  line-height: 1.6rem;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: transparent;
+  background-size: 100%;
+  -moz-user-select: none;
+  -khtml-user-select: none;
+  -webkit-user-select: none;
+  -o-user-select: none;
+}
+
+.ebIcon_rightArrow {
+  background-image: url('ArrowRightSmall_black_16px.svg');
+}
+
+.eaLogin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  width: 500px;
+  height: 450px;
+  padding: 20px;
+  background-color: #E9E9E9;
+  min-height: 350px;
+  box-shadow: #999 0 1px 3px;
+  border-radius: 10px;
+}
+
+.eaLogin-inner {
+  position: relative;
+  background-color: white;
+  width: 100%;
+  height: 100%;
+}
+
+.eaLogin-ericssonLogo {
+  background: url('ericssonLogo_blue.svg') 30px 40px no-repeat;
+  height: 100px;
+  width: 100%;
+}
+
+.eaLogin-body {
+  position: relative;
+  margin: 60px 50px 0 50px;
+  height: 220px;
+}
+
+.eaLogin-title {
+  vertical-align: middle;
+  font-family: EricssonCapitalTT, Arial, sans-serif;
+  font-weight: normal;
+  font-size: 3.2rem;
+  text-transform: uppercase;
+  line-height: 3.6rem;
+  color: #333;
+  margin-bottom: 20px;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: -webkit-linear-gradient(left, #a2c517 10%, #009046 30%, #0082b6 50%, #151f77 70%, #db0050 100%);
+  background-image: -webkit-gradient(linear, left top, right top, color-stop(0.1, #a2c517), color-stop(0.3, #009046), color-stop(0.5, #0082b6), color-stop(0.7, #151f77), color-stop(1, #db0050));
+  background-image: linear-gradient(left, #a2c517 10%, #009046 30%, #0082b6 50%, #151f77 70%, #db0050 100%);
+}
+
+.eaLogin-licenceHeader {
+  font-weight: bold;
+  font-size: 16px;
+  margin-top: 32px;
+  line-height: 16px;
+}
+
+.eaLogin-licenceButton {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+.eaLogin-formButton {
+  min-width: 30px;
+  margin: 0;
+}
+
+.eaLogin-loginUsername {
+  width: 160px;
+  margin: 0 0.8rem 0 0;
+}
+
+.eaLogin-loginField_error_true {
+  border-color: #e5182e;
+}
+
+.eaLogin-loginPassword {
+  width: 160px;
+  margin: 0 0.8rem 0 0;
+}
+
+.eaLogin-messagesBox {
+  background: url('errorIcon01.svg') 1px center no-repeat transparent;
+  font-size: 1.3rem;
+  vertical-align: middle;
+  line-height: 1.6rem;
+  margin: 5px 0 0;
+  padding-left: 15px;
+  color: #e5182e;
+}
+
+.eaLogin-passRemind {
+  height: 30px;
+  line-height: 30px;
+}
+
+.eaLogin-inputWrap {
+  height: 70px;
+  font-size: 0;
+}
+
+.eaLogin-inputComposition {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.eaLogin-copy {
+  position: absolute;
+  bottom: 0;
+  padding-left: 50px;
+  color: #D2D2D2;
+}
+
+@media screen and (max-width: 549px), screen and (max-height: 499px) {
+
+  .eaLogin {
+    position: relative;
+    background-color: white;
+    padding: 0;
+    width: calc(100% - 20px);
+    height: 100%;
+    margin: 10px 10px;
+
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .eaLogin-inner {
+    min-height: 400px;
+  }
+
+  .eaLogin-body {
+    margin: 30px 20px 0 20px;
+  }
+
+  .eaLogin-form {
+    min-height: 106px;
+  }
+
+  .eaLogin-formButton {
+    width: 30px;
+    margin: 0.3rem 0;
+  }
+
+  .eaLogin-loginUsername, .eaLogin-loginPassword {
+    width: 120px;
+    margin: 0.3rem 0.8rem 0.3rem 0;
+  }
+
+  .eaLogin-messagesBox {
+    font-size: 1.2rem;
+    line-height: 1.5rem;
+  }
+
+  .eaLogin-inputWrap {
+    height: 60px;
+  }
+
+  .eaLogin-passRemind {
+    height: 26px;
+    line-height: 26px;
+  }
+
+  .eaLogin-ericssonLogo {
+    height: 20%;
+    min-height: 80px;
+    background-size: 50px;
+    background-position: 20px 20px;
+  }
+
+  .eaLogin-copy {
+    position: absolute;
+    bottom: 0.5rem;
+    padding: 0 20px;
+    font-size: 1rem;
+  }
+
+}

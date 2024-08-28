@@ -1,0 +1,106 @@
+#!/bin/bash
+
+DIR=`dirname $BASH_SOURCE[0]`
+
+# Takes Cluster ID as argument.
+# Sources the corresponding deployment configuration file
+# Exits if the file cannot be read
+get_deployment_conf() {
+    source ${DIR}/deployment_conf/common_profiles.conf
+    CLUSTERID=$1
+    DEPLOYMENT_CONF_FILE="${DIR}/deployment_conf/5${CLUSTERID}.conf"
+    if [ -r $DEPLOYMENT_CONF_FILE ]
+	then
+		source $DEPLOYMENT_CONF_FILE
+	else
+		echo "Config file for 5$CLUSTERID cannot be read."
+		exit 1
+	fi
+    for EXTRA_CONFIGURATION in "${EXTRA_CONFIGURATIONS[@]}"
+    do
+        source ${DIR}/deployment_conf/extra_configurations/$EXTRA_CONFIGURATION
+    done
+}
+
+# Can take CLUSTER ID as an argument otherwise assumes deployment conf has already been read
+# Populates NETSIMS as a string "netsim1 netsim2 netsim3"
+get_netsims() {
+    echo "Getting list of Netsims for deployment"
+    if [ $# -eq 1 ]
+    then
+        get_deployment_conf $1
+    fi
+    NETSIMS=""
+    for LINE in "${NETWORK[@]}"
+    do
+        NETSIM=`echo $LINE | cut -d: -f1`
+        NETSIMS="$NETSIMS $NETSIM"
+    done
+}
+
+copy_ssh_key_to_host() {
+    TARGET=$1
+    USER=$2
+    PASSWORD=$3
+    ${DIR}/copy-rsa-key-to-remote-host.exp $TARGET $USER $PASSWORD
+}
+
+copy_ssh_keys_to_netsims() {
+	NETSIM_TARGETS=$@
+    for NETSIM_TARGET in $NETSIM_TARGETS
+    do
+        ${DIR}/copy-rsa-key-to-remote-host.exp $NETSIM_TARGET root
+        ${DIR}/copy-rsa-key-to-remote-host.exp $NETSIM_TARGET netsim
+    done
+}
+
+# Does an scp to a list of hosts
+# e.g. scp_to_hosts $NETSIMS netsim $NETSIM_CFG "/netsim/netsim_cfg"
+scp_to_hosts() {
+	TARGET_HOSTS=$1
+    TARGET_USER=$2
+	SOURCE_PATH=$3
+	TARGET_PATH=$4
+    for TARGET_HOST in $TARGET_HOSTS
+    do
+        echo "Copying ${SOURCE_PATH} to ${TARGET_USER}@${TARGET_HOST}:${TARGET_PATH}"
+        scp -rp ${SOURCE_PATH} ${TARGET_USER}@${TARGET_HOST}:${TARGET_PATH}
+	done
+}
+
+execute_on_hosts() {
+    TARGET_HOSTS=$1
+	TARGET_USER=$2
+	COMMAND=$3
+	for TARGET_HOST in $TARGET_HOSTS
+    do
+        echo "Executing $COMMAND against $TARGET_HOST as $TARGET_USER via SSH"
+		ssh ${TARGET_USER}@${TARGET_HOST} "$COMMAND"
+    done
+}
+
+execute_on_netsim_pipe() {
+    TARGET_HOSTS=$1
+	COMMAND=$2
+    execute_on_hosts "$TARGET_HOSTS" netsim "echo -e '$COMMAND' | /netsim/inst/netsim_pipe -v"
+}
+
+execute_for_each_simulation() {
+    TARGET_HOSTS=$1
+    COMMAND=$2
+    if [ -n "$3" ]
+    then
+        OUTPUTFILE=$3
+    else
+        OUTPUTFILE='/dev/null'
+    fi
+    execute_on_hosts "$TARGET_HOSTS" netsim "ls /netsim/netsim_dbdir/simdir/netsim/netsimdir/ | while read SIM; do echo -e '$COMMAND' | /netsim/inst/netsim_pipe -sim \$SIM -v | tee -a $OUTPUTFILE; done" 
+}
+
+write_properties_files_for_child_builds() {
+    for NETSIM in $NETSIMS
+    do
+        echo "NETSIM=$NETSIM" > ${DIR}/${NETSIM}_child.prop
+    done
+}
+

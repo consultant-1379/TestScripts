@@ -1,0 +1,80 @@
+#!/bin/bash
+usage=$'Calls the "Run Workload Assertions" jenkins APT job on fem114
+
+Usage: `basename $0` deployment_id workload_vm [assert_from_x_hrs_ago] [email_recipients] [exclude=features_to_exclude] [restrict=restrict_to_features]
+
+where:
+   - deployment_id         : The id of the deployment to run the assertions against, e.g. 435 or ieatenmpcb08
+   - workload_vm           : The associated workload vm of the deployment, e.g. ieatwlvm7000 or ieatwlvm5033
+   - assert_from_x_hrs_ago : The number of hours ago to start the assertion period from. Optional
+   - email_recipients      : A comma separated list of email addresses to send the report to. Optional
+   - features_to_exclude   : A comma separated list of assertion features to exclude from the assertions run. Must include the exclude= prefix. Optional
+   - restrict_to_features  : A comma separated list of assertion features to restrict the assertions running on. Must include the restrict= prefix. Optional
+'
+
+
+if [[ "$1" == "-h" ]] ; then
+    echo "$usage"
+    exit 0
+fi
+
+DEPLOYMENT=$1
+WORKLOAD=$2
+
+hrs=24
+
+ENM_ISO_VERSION=`cat /ericsson/tor/data/.enm-version | awk '{print $5}' | sed 's/)//'`
+
+# Check if $3 has been set
+if [[ ! -z ${3+x} ]]; then
+    # Check if it is a number and if so its the assert_from_x_hrs_ago parameter
+    if [[ $3 == ?(-)+([0-9]) ]]; then
+        hrs=$3
+    elif [[ ! $3 == exclude* && ! $3 == restrict* ]]; then
+        # If it doesn't start with 'exclude=' or "restrict=" it must be the email_recipients parameter
+        email_recipients=$3
+    fi
+fi
+
+# Check if $4 has been set and it isn't the features_to_exclude or restrict parameters
+if [[ ! -z ${4+x} && ! $4 == exclude* && ! $4 == restrict* ]]; then
+    email_recipients=$4
+fi
+
+# Check if any of the parameters is the features_to_exclude parameter
+for i in $*; do
+    if [[ $i ==  exclude* ]]; then
+        features_to_exclude=$i
+    fi
+done
+
+# Check if any of the parameters is the restrict_to_features parameter
+for i in $*; do
+    if [[ $i ==  restrict* ]]; then
+        restrict_to_features=$i
+    fi
+done
+
+# Build the default request_data variable with the mandatory parameters
+DATE=`date --date="$hrs hours ago" '+%Y-%m-%d %H:%M:%S'`
+request_data="cluster_id=${DEPLOYMENT}&workload_vm=${WORKLOAD}&start_time=${DATE}&enm_iso_version=${ENM_ISO_VERSION}"
+
+# Add the optional email_recipients parameter if set
+if [[ ! -z ${email_recipients+x} ]]; then
+    request_data="${request_data}&email_recipients=${email_recipients}"
+fi
+
+# Add the features_to_exclude parameter if it has been set
+if [[ ! -z ${features_to_exclude+x} ]]; then
+    request_data="${request_data}&features_to_exclude=${features_to_exclude:8}"
+fi
+
+# Add the restrict_to_features parameter if it has been set
+if [[ ! -z ${restrict_to_features+x} ]]; then
+    request_data="${request_data}&restrict_to_features=${restrict_to_features:9}"
+fi
+
+# Call the APT_Run_Workload_Assertions jenkins job
+curl --request POST --url "https://fem114-eiffel004.lmera.ericsson.se:8443/jenkins/view/APT%20Jobs/job/APT_Run_Workload_Assertions/buildWithParameters?delay=0sec"  --header "cache-control: no-cache" --header "content-type: application/x-www-form-urlencoded" --data "${request_data}"
+
+echo "Request submitted"

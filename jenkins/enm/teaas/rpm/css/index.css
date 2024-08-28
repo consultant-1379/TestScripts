@@ -1,0 +1,412 @@
+html, body {
+    padding: 0;
+    margin: 0;
+    font-size: 1em;
+    font-family: Arial, Helvetica, sans-serif;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+#Container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+@font-face {
+    font-family: EricssonCapitalTT;
+    src: url('./EricssonCapitalTT.ttf') format('truetype');
+}
+
+@media screen and (max-width:549px), screen and (max-height:499px) {
+    html, body {
+        font-size: 0.9em;
+        background-color: #E9E9E9;
+    }
+
+    #Container {
+        position: absolute;
+        width: auto;
+        height: auto;
+        top: 0px;
+        left: 0px;
+        bottom: 0px;
+        right: 0px;
+        padding: 15px;
+        overflow: auto;
+    }
+}
+
+.torLogin-Holder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: auto;
+    width: 500px;
+    height: 450px;
+    padding: 20px;
+    background-color: #E9E9E9;
+    min-height: 350px;
+    -webkit-box-shadow: #999 0 1px 3px;
+    -moz-box-shadow: #999 0 1px 3px;
+    -ms-box-shadow: #999 0 1px 3px;
+    box-shadow: #999 0 1px 3px;
+    -webkit-border-radius: 10px;
+    -moz-border-radius: 10px;
+    -ms-border-radius: 10px;
+    border-radius: 10px;
+}
+
+.torLogin-Holder-inner {
+    position: relative;
+    background-color: white;
+    width: 100%;
+    height: 100%;
+}
+
+.torLogin-Holder-ericssonLogo {
+    background: url('./ericssonLogo_blue.svg') 30px 40px no-repeat;
+    height: 100px;
+    width: 100%;
+}
+
+.torLogin-Holder-nameWrap {
+    position: relative;
+    display: table;
+    width: 100%;
+    height: 140px;
+    padding: 20px 0 0;
+}
+
+.torLogin-Holder-title {
+    padding: 0 50px;
+    display: table-cell;
+    vertical-align: middle;
+    font-family: EricssonCapitalTT;
+    font-weight: normal;
+    font-size: 2em;
+    text-transform: uppercase;
+    line-height: 1em;
+    color: #333;
+    background-clip: padding-box;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-image: -webkit-gradient(linear, left top, right top, color-stop(0.1, #a2c517), color-stop(0.3, #009046), color-stop(0.5, #0082b6), color-stop(0.7, #151f77), color-stop(1, #db0050));
+    background-image: -webkit-linear-gradient(left, #a2c517 10%, #009046 30%, #0082b6 50%, #151f77 70%, #db0050 100%);
+    background-image: -o-linear-gradient(transparent, transparent);
+}
+
+@-moz-document url-prefix() {
+    .torLogin-Holder-title::before {
+        background: linear-gradient(to right, #a2c517 10%, #009046 30%, #0082b6 50%, #151f77 70%, #db0050 100%);
+        content: '';
+        mix-blend-mode: screen;
+    }
+}
+
+@-moz-document url-prefix() {
+    .torLogin-Holder-title::after, .torLogin-Holder-title::before {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        pointer-events: none;
+    }
+}
+
+.torLogin-Holder-form {
+    position: relative;
+    padding: 0 50px;
+}
+
+.torLogin-Holder-notice {
+    position: relative;
+    padding: 0 50px;
+    margin-top: 60px;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.torLogin-Holder-noticeText {
+    position: relative;
+    margin: 0 50px;
+    font-size: 11px;
+    height: 150px;
+    overflow: auto;
+}
+
+.torLogin-Holder-okButton {
+    position: absolute;
+    margin:8px 0 0 50px;
+    background: #d9dada;
+    background: -webkit-gradient(linear, left top, left bottom, color-stop(0, rgba(0, 0, 0, 0)), color-stop(1, rgba(0, 0, 0, 0.2)));
+    background: -ms-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2));
+    background: -o-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.2) 100%);
+    background: -webkit-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.2) 100%);
+    background: -moz-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.2) 100%);
+    background: linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.2) 100%);
+    -webkit-border-radius: 4px;
+    -moz-border-radius: 4px;
+    -ms-border-radius: 4px;
+    border-radius: 2px;
+    -webkit-box-sizing: content-box;
+    -moz-box-sizing: content-box;
+    box-sizing: content-box;
+    width: 48px;
+    height: 26px;
+    border: 1px solid #999;
+    padding: 0;
+    cursor: pointer;
+}
+
+.torLogin-Holder-form input {
+    -webkit-border-radius: 2px;
+    -moz-border-radius: 2px;
+    -ms-border-radius: 2px;
+    border-radius: 2px;
+    -webkit-box-shadow: #CCC 0 1px 2px inset;
+    -moz-box-shadow: #CCC 0 1px 2px inset;
+    -ms-box-shadow: #CCC 0 1px 2px inset;
+    box-shadow: #CCC 0 1px 2px inset;
+    width: 160px;
+    height: 26px;
+    vertical-align: top;
+    border: 1px solid #999;
+    padding: 0 5px;
+    margin: 0 2px 5px 0;
+    color: #333;
+
+    .applyBoxSizing(~"border-box");
+    -webkit-transition: all 0.3s ease-in-out;
+    -moz-transition: all 0.3s ease-in-out;
+    -ms-transition: all 0.3s ease-in-out;
+    -o-transition: all 0.3s ease-in-out;
+    transition: all 0.3s ease-in-out;
+}
+
+.torLogin-Holder-form input:focus {
+    outline: none;
+    padding: 0 5px;
+    border-color: #0066B3;
+    .applyBoxSizing(~"border-box");
+    -webkit-box-shadow: 0px 0px 1px 1px rgba(0, 102, 179, 0.3);
+    box-shadow: 0px 0px 1px 1px rgba(0, 102, 179, 0.3);
+
+}
+
+.torLogin-Holder-formButton {
+    background: #d9dada;
+    background: -webkit-gradient(linear, left top, left bottom, color-stop(0, rgba(0, 0, 0, 0)), color-stop(1, rgba(0, 0, 0, 0.2)));
+    background: -ms-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2));
+    background: -o-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.2) 100%);
+    background: -webkit-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.2) 100%);
+    background: -moz-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.2) 100%);
+    background: linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.2) 100%);
+    -webkit-border-radius: 4px;
+    -moz-border-radius: 4px;
+    -ms-border-radius: 4px;
+    border-radius: 2px;
+    -webkit-box-sizing: content-box;
+    -moz-box-sizing: content-box;
+    box-sizing: content-box;
+    width: 36px;
+    height: 26px;
+    border: 1px solid #999;
+    padding: 0;
+    margin: 0 0 5px 5px;
+    cursor: pointer;
+}
+
+.torLogin-Holder-formButton:hover {
+    background: -webkit-gradient(linear, left top, left bottom, color-stop(0, rgba(0, 0, 0, 0)), color-stop(1, rgba(0, 0, 0, 0.15)));
+    background: -ms-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.15));
+    background: -o-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.15) 100%);
+    background: -webkit-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.15) 100%);
+    background: -moz-linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.15) 100%);
+    background: linear-gradient(center top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.15) 100%);
+}
+
+.torLogin-Holder-formButton:active {
+    background: #d9dada;
+}
+
+.torLogin-Holder-formButtonImage {
+    display: inline-block;
+    background: url('./aro_right_big_dark.svg') no-repeat center center transparent;
+    background-size: 9px 15px;
+    width: 20px;
+    height: 20px;
+    vertical-align: middle;
+}
+
+.torLogin-Holder-loginPassword_error_true {
+    padding: 0 4px !important;
+    border: solid 2px #e5182e !important;
+    height: 26px !important;
+}
+
+.torLogin-Holder-loginUsername_error_true {
+    padding: 0 4px !important;
+    border: solid 2px #e5182e !important;
+    height: 26px !important;
+}
+
+.torLogin-Holder-messagesBox {
+    background: url('./errorIcon01.svg') 1px 2px no-repeat transparent;
+    font-size: 0.8em;
+    vertical-align: middle;
+    line-height: 1.2em;
+    margin: 5px 0px 0;
+    padding-left: 15px;
+    color: #e5182e;
+}
+
+.torLogin-Holder-inputWrap {
+    height: 70px;
+}
+
+.torLogin-Holder-hostname {
+    font-size: 0.9em;
+    word-wrap: break-word;
+}
+
+.torLogin-Holder-inputComposition {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.torLogin-Holder-copy {
+    position: absolute;
+    bottom: 2.0em;
+    padding-left: 50px;
+    font-size: 0.80em;
+    color: #D2D2D2;
+}
+
+@media screen and (max-width: 549px), screen and (max-height: 499px) {
+    .torLogin-Holder {
+        position: relative;
+        -webkit-box-shadow: none;
+        -moz-box-shadow: none;
+        -ms-box-shadow: none;
+        box-shadow: none;
+        -webkit-border-radius: 0;
+        -moz-border-radius: 0;
+        -ms-border-radius: 0;
+        border-radius: 0;
+        background-color: white;
+        padding: 20px 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .torLogin-Holder-inner {
+        /*
+                    overflow-y: auto;
+        */
+
+    }
+
+    .torLogin-Holder-nameWrap {
+        margin: 20px 0 0;
+        padding: 0;
+        height: 34%;
+        min-height: 140px;
+    }
+
+    .torLogin-Holder-title {
+        padding: 0 30px;
+    }
+
+    .torLogin-Holder-form {
+        padding: 0 30px;
+        height: 26%;
+        min-height: 106px;
+    }
+
+    .torLogin-Holder-form input {
+        width: 120px;
+        height: 24px;
+    }
+
+    .torLogin-Holder-form input:focus {
+        height: 24px;
+    }
+
+    .torLogin-Holder-formButton {
+        width: 30px;
+        height: 24px;
+    }
+
+    .torLogin-Holder-loginPassword_error_true {
+        height: 22px !important;
+    }
+
+    .torLogin-Holder-loginUsername_error_true {
+        height: 22px !important;
+    }
+
+    .torLogin-Holder-messagesBox {
+        font-size: 1em;
+        line-height: 1.2em;
+    }
+
+    .torLogin-Holder-inputWrap {
+        height: 60px;
+    }
+
+    .torLogin-Holder-passRemind {
+        height: 26px;
+        line-height: 26px;
+    }
+
+    .torLogin-Holder-ericssonLogo {
+        height: 20%;
+        min-height: 80px;
+        background-size: 50px;
+        background-position: 20px 30px;
+    }
+
+    .torLogin-Holder-copy {
+        position: absolute;
+        bottom: 0.5em;
+        padding-left: 30px;
+    }
+}
+
+@media screen and (max-width: 549px) and (min-height: 500px) {
+    .torLogin-Holder {
+        background-color: white;
+    }
+
+    .torLogin-Holder-inner {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        margin: auto;
+        height: 470px;
+        overflow: hidden;
+    }
+}
+
+@media screen and (min-width: 550px) and (max-height: 499px) {
+    .torLogin-Holder {
+        background-color: white;
+    }
+
+    .torLogin-Holder-inner {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        margin: auto;
+        width: 520px;
+    }
+}

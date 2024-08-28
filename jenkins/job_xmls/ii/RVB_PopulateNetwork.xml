@@ -1,0 +1,294 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <logRotator class="hudson.tasks.LogRotator">
+    <daysToKeep>14</daysToKeep>
+    <numToKeep>-1</numToKeep>
+    <artifactDaysToKeep>-1</artifactDaysToKeep>
+    <artifactNumToKeep>-1</artifactNumToKeep>
+  </logRotator>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.security.AuthorizationMatrixProperty>
+      <permission>hudson.scm.SCM.Tag:eeiabhn</permission>
+      <permission>hudson.scm.SCM.Tag:eadaaar</permission>
+      <permission>hudson.scm.SCM.Tag:ejordba</permission>
+      <permission>hudson.scm.SCM.Tag:emicmcf</permission>
+      <permission>hudson.scm.SCM.Tag:emicmar</permission>
+      <permission>hudson.scm.SCM.Tag:ekeicun</permission>
+      <permission>hudson.scm.SCM.Tag:ejoemur</permission>
+      <permission>hudson.scm.SCM.Tag:lmieody</permission>
+      <permission>hudson.scm.SCM.Tag:edanwat</permission>
+      <permission>hudson.scm.SCM.Tag:lmijge</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:eeiabhn</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:eadaaar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:ejordba</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:emicmcf</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:emicmar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:ekeicun</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:ejoemur</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:lmieody</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:edanwat</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:lmijge</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:eeiabhn</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:eadaaar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:ejordba</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:emicmcf</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:emicmar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:ekeicun</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:ejoemur</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:lmieody</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:edanwat</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:lmijge</permission>
+      <permission>hudson.model.Item.Read:anonymous</permission>
+      <permission>hudson.model.Item.Read:eeiabhn</permission>
+      <permission>hudson.model.Item.Read:eadaaar</permission>
+      <permission>hudson.model.Item.Read:ejordba</permission>
+      <permission>hudson.model.Item.Read:emicmcf</permission>
+      <permission>hudson.model.Item.Read:emicmar</permission>
+      <permission>hudson.model.Item.Read:ekeicun</permission>
+      <permission>hudson.model.Item.Read:ejoemur</permission>
+      <permission>hudson.model.Item.Read:lmieody</permission>
+      <permission>hudson.model.Item.Read:edanwat</permission>
+      <permission>hudson.model.Item.Read:lmijge</permission>
+      <permission>hudson.model.Item.ExtendedRead:eeiabhn</permission>
+      <permission>hudson.model.Item.ExtendedRead:eadaaar</permission>
+      <permission>hudson.model.Item.ExtendedRead:ejordba</permission>
+      <permission>hudson.model.Item.ExtendedRead:emicmcf</permission>
+      <permission>hudson.model.Item.ExtendedRead:emicmar</permission>
+      <permission>hudson.model.Item.ExtendedRead:ekeicun</permission>
+      <permission>hudson.model.Item.ExtendedRead:ejoemur</permission>
+      <permission>hudson.model.Item.ExtendedRead:lmieody</permission>
+      <permission>hudson.model.Item.ExtendedRead:edanwat</permission>
+      <permission>hudson.model.Item.ExtendedRead:lmijge</permission>
+      <permission>hudson.model.Item.Workspace:eeiabhn</permission>
+      <permission>hudson.model.Item.Workspace:eadaaar</permission>
+      <permission>hudson.model.Item.Workspace:ejordba</permission>
+      <permission>hudson.model.Item.Workspace:emicmcf</permission>
+      <permission>hudson.model.Item.Workspace:emicmar</permission>
+      <permission>hudson.model.Item.Workspace:ekeicun</permission>
+      <permission>hudson.model.Item.Workspace:ejoemur</permission>
+      <permission>hudson.model.Item.Workspace:lmieody</permission>
+      <permission>hudson.model.Item.Workspace:edanwat</permission>
+      <permission>hudson.model.Item.Workspace:lmijge</permission>
+      <permission>hudson.model.Item.Configure:eeiabhn</permission>
+      <permission>hudson.model.Item.Configure:eadaaar</permission>
+      <permission>hudson.model.Item.Configure:ejordba</permission>
+      <permission>hudson.model.Item.Configure:emicmcf</permission>
+      <permission>hudson.model.Item.Configure:emicmar</permission>
+      <permission>hudson.model.Item.Configure:ekeicun</permission>
+      <permission>hudson.model.Item.Configure:ejoemur</permission>
+      <permission>hudson.model.Item.Configure:lmieody</permission>
+      <permission>hudson.model.Item.Configure:edanwat</permission>
+      <permission>hudson.model.Item.Configure:lmijge</permission>
+      <permission>hudson.model.Run.Delete:eeiabhn</permission>
+      <permission>hudson.model.Run.Delete:eadaaar</permission>
+      <permission>hudson.model.Run.Delete:ejordba</permission>
+      <permission>hudson.model.Run.Delete:emicmcf</permission>
+      <permission>hudson.model.Run.Delete:emicmar</permission>
+      <permission>hudson.model.Run.Delete:ekeicun</permission>
+      <permission>hudson.model.Run.Delete:ejoemur</permission>
+      <permission>hudson.model.Run.Delete:lmieody</permission>
+      <permission>hudson.model.Run.Delete:edanwat</permission>
+      <permission>hudson.model.Run.Delete:lmijge</permission>
+      <permission>hudson.model.Item.Discover:eeiabhn</permission>
+      <permission>hudson.model.Item.Discover:eadaaar</permission>
+      <permission>hudson.model.Item.Discover:ejordba</permission>
+      <permission>hudson.model.Item.Discover:emicmcf</permission>
+      <permission>hudson.model.Item.Discover:emicmar</permission>
+      <permission>hudson.model.Item.Discover:ekeicun</permission>
+      <permission>hudson.model.Item.Discover:ejoemur</permission>
+      <permission>hudson.model.Item.Discover:lmieody</permission>
+      <permission>hudson.model.Item.Discover:edanwat</permission>
+      <permission>hudson.model.Item.Discover:lmijge</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:eeiabhn</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:eadaaar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:ejordba</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:emicmcf</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:emicmar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:ekeicun</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:ejoemur</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:lmieody</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:edanwat</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:lmijge</permission>
+      <permission>hudson.model.Item.Build:eeiabhn</permission>
+      <permission>hudson.model.Item.Build:eadaaar</permission>
+      <permission>hudson.model.Item.Build:ejordba</permission>
+      <permission>hudson.model.Item.Build:emicmcf</permission>
+      <permission>hudson.model.Item.Build:emicmar</permission>
+      <permission>hudson.model.Item.Build:ekeicun</permission>
+      <permission>hudson.model.Item.Build:ejoemur</permission>
+      <permission>hudson.model.Item.Build:lmieody</permission>
+      <permission>hudson.model.Item.Build:edanwat</permission>
+      <permission>hudson.model.Item.Build:lmijge</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:eeiabhn</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:eadaaar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:ejordba</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:emicmcf</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:emicmar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:ekeicun</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:ejoemur</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:lmieody</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:edanwat</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:lmijge</permission>
+      <permission>hudson.model.Item.Cancel:eeiabhn</permission>
+      <permission>hudson.model.Item.Cancel:eadaaar</permission>
+      <permission>hudson.model.Item.Cancel:ejordba</permission>
+      <permission>hudson.model.Item.Cancel:emicmcf</permission>
+      <permission>hudson.model.Item.Cancel:emicmar</permission>
+      <permission>hudson.model.Item.Cancel:ekeicun</permission>
+      <permission>hudson.model.Item.Cancel:ejoemur</permission>
+      <permission>hudson.model.Item.Cancel:lmieody</permission>
+      <permission>hudson.model.Item.Cancel:edanwat</permission>
+      <permission>hudson.model.Item.Cancel:lmijge</permission>
+      <permission>hudson.model.Item.Delete:eeiabhn</permission>
+      <permission>hudson.model.Item.Delete:eadaaar</permission>
+      <permission>hudson.model.Item.Delete:ejordba</permission>
+      <permission>hudson.model.Item.Delete:emicmcf</permission>
+      <permission>hudson.model.Item.Delete:emicmar</permission>
+      <permission>hudson.model.Item.Delete:ekeicun</permission>
+      <permission>hudson.model.Item.Delete:ejoemur</permission>
+      <permission>hudson.model.Item.Delete:lmieody</permission>
+      <permission>hudson.model.Item.Delete:edanwat</permission>
+      <permission>hudson.model.Item.Delete:lmijge</permission>
+      <permission>hudson.model.Run.Update:eeiabhn</permission>
+      <permission>hudson.model.Run.Update:eadaaar</permission>
+      <permission>hudson.model.Run.Update:ejordba</permission>
+      <permission>hudson.model.Run.Update:emicmcf</permission>
+      <permission>hudson.model.Run.Update:emicmar</permission>
+      <permission>hudson.model.Run.Update:ekeicun</permission>
+      <permission>hudson.model.Run.Update:ejoemur</permission>
+      <permission>hudson.model.Run.Update:lmieody</permission>
+      <permission>hudson.model.Run.Update:edanwat</permission>
+      <permission>hudson.model.Run.Update:lmijge</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:eeiabhn</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:eadaaar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:ejordba</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:emicmcf</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:emicmar</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:ekeicun</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:ejoemur</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:lmieody</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:edanwat</permission>
+      <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:lmijge</permission>
+    </hudson.security.AuthorizationMatrixProperty>
+    <hudson.plugins.buildblocker.BuildBlockerProperty plugin="build-blocker-plugin@1.4.1">
+      <useBuildBlocker>false</useBuildBlocker>
+    </hudson.plugins.buildblocker.BuildBlockerProperty>
+    <com.ericsson.duraci.messaging.ImplicitMessagingContributorProperty plugin="eiffel-core@26.0.6">
+      <scriptEnabled>false</scriptEnabled>
+    </com.ericsson.duraci.messaging.ImplicitMessagingContributorProperty>
+    <com.sonyericsson.jenkins.plugins.bfa.model.ScannerJobProperty plugin="build-failure-analyzer@1.13.1">
+      <doNotScan>false</doNotScan>
+    </com.sonyericsson.jenkins.plugins.bfa.model.ScannerJobProperty>
+    <com.ericsson.duraci.messaging.SequentialSemanticEiffelMessageLinkingJobProperty plugin="eiffel-core@26.0.6">
+      <sequentialLinkingEnabled>false</sequentialLinkingEnabled>
+    </com.ericsson.duraci.messaging.SequentialSemanticEiffelMessageLinkingJobProperty>
+    <com.ericsson.duraci.messaging.ImplicitEiffelConfigurationNotificationMessagingJobProperty plugin="eiffel-core@26.0.6">
+      <messagingEnabled>false</messagingEnabled>
+    </com.ericsson.duraci.messaging.ImplicitEiffelConfigurationNotificationMessagingJobProperty>
+    <com.ericsson.duraci.messaging.ImplicitEiffelMessagingJobProperty plugin="eiffel-core@26.0.6">
+      <messagingEnabled>false</messagingEnabled>
+      <jobFinishedDisabled>false</jobFinishedDisabled>
+    </com.ericsson.duraci.messaging.ImplicitEiffelMessagingJobProperty>
+    <org.bstick12.jenkinsci.plugins.leastload.LeastLoadDisabledProperty plugin="leastload@1.0.3">
+      <leastLoadDisabled>false</leastLoadDisabled>
+    </org.bstick12.jenkinsci.plugins.leastload.LeastLoadDisabledProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>clusterId</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>drop</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    <se.diabol.jenkins.pipeline.PipelineProperty plugin="delivery-pipeline-plugin@0.9.7">
+      <taskName>Add &amp; Supervise Network</taskName>
+      <stageName>Network Setup</stageName>
+    </se.diabol.jenkins.pipeline.PipelineProperty>
+    <com.sonyericsson.rebuild.RebuildSettings plugin="rebuild@1.25">
+      <autoRebuild>false</autoRebuild>
+      <rebuildDisabled>false</rebuildDisabled>
+    </com.sonyericsson.rebuild.RebuildSettings>
+    <de.pellepelster.jenkins.walldisplay.WallDisplayJobProperty plugin="jenkinswalldisplay@0.6.30"/>
+  </properties>
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@2.4.0">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>${GERRIT_MIRROR}/OSS/com.ericsson.nms.rv/TestScripts</url>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>refs/heads/master</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <gitTool>ISO_Build_Git</gitTool>
+    <submoduleCfg class="list"/>
+    <extensions>
+      <hudson.plugins.git.extensions.impl.CloneOption>
+        <shallow>true</shallow>
+        <reference></reference>
+      </hudson.plugins.git.extensions.impl.CloneOption>
+    </extensions>
+  </scm>
+  <assignedNode>RVB_Slave_S</assignedNode>
+  <canRoam>false</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <jdk>(Default)</jdk>
+  <triggers/>
+  <concurrentBuild>true</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command># Get MS IP
+MS_IP=`wget -q -O - --no-check-certificate &quot;https://cifwk-oss.lmera.ericsson.se/generateTAFHostPropertiesJSON/?clusterId=${clusterId}&amp;tunnel=true&quot; | awk -F&apos;,&apos; &apos;{print $1}&apos; | awk -F&apos;:&apos; &apos;{print $2}&apos; | sed -e &quot;s/\&quot;//g&quot; -e &quot;s/ //g&quot;`
+
+jenkins/slave/job_setup.sh $MS_IP
+
+ssh root@${MS_IP} &apos;cd /root/rvb/; /bin/bash network_setup/create_network.sh&apos;</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.plugins.parameterizedtrigger.BuildTrigger plugin="parameterized-trigger@2.29">
+      <configs>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.CurrentBuildParameters/>
+          </configs>
+          <projects>RVB_ApplyWorkload</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+      </configs>
+    </hudson.plugins.parameterizedtrigger.BuildTrigger>
+    <hudson.tasks.Mailer plugin="mailer@1.15">
+      <recipients>PDLENM14BR@pdl.internal.ericsson.com</recipients>
+      <dontNotifyEveryUnstableBuild>false</dontNotifyEveryUnstableBuild>
+      <sendToIndividuals>false</sendToIndividuals>
+    </hudson.tasks.Mailer>
+  </publishers>
+  <buildWrappers>
+    <hudson.plugins.ws__cleanup.PreBuildCleanup plugin="ws-cleanup@0.28">
+      <deleteDirs>false</deleteDirs>
+      <cleanupParameter></cleanupParameter>
+      <externalDelete></externalDelete>
+    </hudson.plugins.ws__cleanup.PreBuildCleanup>
+    <hudson.plugins.ansicolor.AnsiColorBuildWrapper plugin="ansicolor@0.4.1">
+      <colorMapName>xterm</colorMapName>
+    </hudson.plugins.ansicolor.AnsiColorBuildWrapper>
+    <org.jenkinsci.plugins.buildnamesetter.BuildNameSetter plugin="build-name-setter@1.3">
+      <template>${ENV,var=&quot;clusterId&quot;}-${ENV,var=&quot;drop&quot;}</template>
+    </org.jenkinsci.plugins.buildnamesetter.BuildNameSetter>
+  </buildWrappers>
+</project>

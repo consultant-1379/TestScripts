@@ -1,0 +1,3 @@
+Cmnd_Alias SU = /bin/su
+Defaults    secure_path = /usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/opt/ericsson/enmutils/bin:/opt/ericsson/enminst/bin:/root/rvb/bin
+%endurance_testers ALL=(root) NOPASSWD: ALL, !SU

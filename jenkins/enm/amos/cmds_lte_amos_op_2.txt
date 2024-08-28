@@ -1,0 +1,37 @@
+##Load Mo tree and build proxy table.
+lt all
+## Read(get) PmService attributes from the MO and set it to a 0.
+get PmService PmServiceId
+set PmService= PmServiceId 0
+get PmService PmServiceId
+## Wait 5 seconds
+wait 5
+## Set PmService attributes to a 1.
+set PmService= PmServiceId 1
+## Load Mo tree and build proxy table.
+lt all
+## Wait 20 seconds
+wait 20
+## Produce PM kpi reports based on counter values in ROP files and formulas in CPI
+## -m 3   :  will show statistics for last 3 hours.
+## -r 1-5 : shows reports for 1 to 5 and 10 to 15.
+## pmr is failing on the quarter hour due to performance measurement testing
+## the following check will try to run it only between 2 and 12 minutes after the quarter hour
+#$minutes = `date +%M`
+#$remainder = `expr $minutes % 15`
+#if $remainder < 2
+#        wait 120
+#else if $remainder > 12
+#        wait 300
+#fi
+pmr -m 0.25 -r 1-5,10-15
+## Wait 20 seconds
+wait 20
+##str As this command doesn't work,do pst instead.
+## pst    : List all scanners and their state
+#pst
+##wait 20 swconds
+#wait 20
+###run dbc command
+#dbc
+

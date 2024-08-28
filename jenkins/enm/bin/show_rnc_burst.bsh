@@ -1,0 +1,12 @@
+#!/bin/sh
+SIMLIST=`ls /netsim/netsimdir | grep RNC | grep -v zip | grep -v txt`
+RNC=`ls /netsim/netsimdir | grep RNC | grep -v zip | grep -v txt | awk -F- '{print $NF}'`
+for LTE in $SIMLIST
+
+ do
+
+
+        echo '.open' $LTE
+        echo '.select' $RNC
+        echo  'showbursts:id=12;'
+ done

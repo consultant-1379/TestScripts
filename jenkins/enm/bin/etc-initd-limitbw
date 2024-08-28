@@ -1,0 +1,82 @@
+#!/bin/bash
+
+### BEGIN INIT INFO
+# Provides: limitbw 
+# Required-Start: netsim
+# Required-Stop: netsim 
+# Default-Start: 3 
+# Default-Stop: 0 6
+# Short-Description: create and remove Bandwidth Limits 
+# Description: This is the init.d script that enables bandwidth limits to be reapplyed at reboot
+### END INIT INFO
+
+
+start() {
+
+	# Create Temporary Script file
+        TMP_SCRIPT_FILE="/tmp/limitbw"
+	LOGFILE="/var/tmp/limitbw_add.log"
+        echo "#!/bin/bash" > $TMP_SCRIPT_FILE
+        echo "/netsim_users/pms/bin/limitbw -n -c &> $LOGFILE" >> $TMP_SCRIPT_FILE
+        chmod 755 $TMP_SCRIPT_FILE
+
+
+
+	# Checking to see how it's been since reboot on account of issue found in Netsim Jira: NS-4669
+        #  Ideally, all nodes should be started as part of the netsim service startup and given that limitbw depends on netsim service, this extra arbitrary 20mins wait should not be required
+        #  However, this wait is needed on account of Netsim Jira: NS-4669 - once that Jira is addressed, this wait should be removed
+	UPTIME=$(uptime | awk '{print $3}')
+
+	if [ -z $(echo $UPTIME | egrep '^0:[01]') ]
+	then
+		echo "Checking Uptime: $UPTIME - Applying settings now as it's NOT within 20 mins of reboot"
+		$TMP_SCRIPT_FILE & 
+
+	else
+		echo "Checking Uptime: $UPTIME - Looks like this is within 20 mins of reboot, "
+		echo " therefore need to wait for Netsim nodes to be started first "
+		echo " otherwise this script will fail"
+
+		DELAY_MINS=15
+		MESSAGE="- delaying for ${DELAY_MINS}mins to allow Netsim Nodes to be started first"
+
+	        atd
+        	at -f $TMP_SCRIPT_FILE now + $DELAY_MINS minutes
+
+	fi
+ 
+	/bin/logger "$0 - applying bandwidth limits $MESSAGE"
+
+
+}
+
+stop() {
+        /bin/logger "$0 - removing bandwidth limits"
+	/netsim_users/pms/bin/limitbw -n -r
+}
+
+status() {
+	/bin/logger "$0 - checking bandwidth limits"
+	/netsim_users/pms/bin/limitbw -n -s
+}
+
+
+case "$1" in 
+    start)
+       start
+       ;;
+    stop)
+       stop
+       ;;
+    restart)
+       stop
+       start
+       ;;
+    status)
+       status
+       ;;
+    *)
+       echo "Usage: $0 {start|stop|status|restart}"
+esac
+
+exit 0 

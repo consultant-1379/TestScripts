@@ -1,0 +1,28 @@
+#!/bin/bash
+
+echo "- Add alias to EMP to allow easy connection to EMP -"
+
+[[ -z $EMP ]] && { echo "Need to run this on Workload_VM with EMP variable set"; exit 1; }
+ 
+WORKLOAD_VM=$(hostname)
+DOMAINNAME=$(egrep search /etc/resolv.conf | awk '{print $NF}')
+RC_FILE=/tmp/$(basename $0)
+RC_FILENAME_FULL=$(basename $RC_FILE)
+RC_FILENAME="${RC_FILENAME_FULL%.*}_rc_file"
+CLOUD_USER_SSH_PRIVATE_KEY_FILE="/var/tmp/enm_keypair.pem"
+BASHRC_FILE="/home/cloud-user/.bashrc"
+
+echo "1. Creating $RC_FILENAME"
+cat << EOF > $RC_FILE
+alias connect_to_vm="expect -c 'spawn ssh root@$WORKLOAD_VM.$DOMAINNAME; expect -re password: { send 12shroot\r\n; exp_continue; expect eof } -re # { interact } -re yes { send yes\r\n; unset expect_out(buffer); exp_continue }' "
+EOF
+
+echo "2. Copying $RC_FILENAME to $EMP:/tmp"
+scp -i $CLOUD_USER_SSH_PRIVATE_KEY_FILE $RC_FILE cloud-user@$EMP:/tmp/$RC_FILENAME
+
+echo "3. Removing ref to $RC_FILENAME from $BASHRC_FILE, if exists"
+ssh -i $CLOUD_USER_SSH_PRIVATE_KEY_FILE cloud-user@$EMP "sed -i \"/$RC_FILENAME/d\" $BASHRC_FILE"
+
+echo "4. Adding ref to $RC_FILENAME to $BASHRC_FILE"
+ssh -i $CLOUD_USER_SSH_PRIVATE_KEY_FILE cloud-user@$EMP "echo \". /tmp/$RC_FILENAME\" >> $BASHRC_FILE" 
+

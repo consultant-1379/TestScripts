@@ -1,0 +1,48 @@
+#!/usr/bin/expect 
+
+set sourcedScript [ info script ]
+set hostname [lindex $argv 0]
+if  { $argc < 1 } {
+        puts "This script will install guestfish on the hostname passed to the script"
+        puts "Syntax: $sourcedScript hostname "
+        exit 0
+}
+
+
+set timeout 30
+
+spawn -noecho /bin/sh -c "ssh litp-admin@$hostname"
+
+expect {
+        "$ " {
+                send "su -\r"
+                exp_continue
+
+        } "Are you sure you want to continue connecting (yes/no)?" {
+                send "yes\r"
+                exp_continue
+
+        } "consent to monitoring and data collection." {
+                expect "#####"
+                exp_continue
+
+        } "assword: " {
+                send "12shroot\r"
+                exp_continue
+
+        } "# " {
+                send "\[\[ -f /usr/bin/virt-copy-out \]\] \&\& echo guestfish_is_installed \|\| echo guestfish_is_not_installed\r"
+                expect {
+                        "\nguestfish_is_installed" {
+                               puts "Guestfish already installed on $hostname, so nothing to do"
+                        } "\nguestfish_is_not_installed" {
+                               puts "Guestfish not installed on $hostname, so installing now ..."
+                               send "yum -y install guestfish\r"
+                               expect "Complete!" {
+                                        puts "... Guestfish installed on $hostname"
+                               }
+                        }
+                }
+        }
+}
+

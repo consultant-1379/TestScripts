@@ -1,0 +1,2 @@
+PERMIT_ROOT_LOGIN=without-password
+ADD_MODEL_ID_DURING_CREATION=false

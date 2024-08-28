@@ -1,0 +1,19 @@
+#!/bin/bash
+
+_get_nexus_urls_for_simulated_network() {
+    SIMULATED_NETWORK=$1
+    MEDIA_ARTIFACT_NAME=$(echo $SIMULATED_NETWORK | cut -d: -f1)
+    MEDIA_ARTIFACT_VERSION=$(echo $SIMULATED_NETWORK | cut -d: -f2)
+    wget -q -O - --no-check-certificate --post-data="{\"isoName\":\"$MEDIA_ARTIFACT_NAME\",\"isoVersion\":\"$MEDIA_ARTIFACT_VERSION\",\"pretty\":true,\"showTestware\":false}" https://cifwk-oss.lmera.ericsson.se/getPackagesInISO/ | grep url | sed -e 's/.*: "\(.*\)".*/\1/g' > nexus_urls
+    cat nexus_urls | sed 's|arm1s11-eiffel004.eiffel.gic.ericsson.se|arm901-eiffel004.athtem.eei.ericsson.se|' > nexus_local_urls
+}
+
+get_nw_layout_file() {
+    SIMULATED_NETWORK=$1
+    _get_nexus_urls_for_simulated_network $SIMULATED_NETWORK
+    NW_LAYOUT_FILE_URL=$(cat nexus_local_urls | grep -v ransport | grep "nw_layout")
+    wget $NW_LAYOUT_FILE_URL
+    LATEST_FILE=$(ls -rtlh *nw_layout* | tail -1 | awk '{print $NF}')
+    unzip $LATEST_FILE 
+    rm -f *nw_layout*.zip
+}

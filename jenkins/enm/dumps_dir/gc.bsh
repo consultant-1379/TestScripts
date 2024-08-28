@@ -1,0 +1,7 @@
+#!/bin/bash
+
+
+for i in `getent hosts|egrep 'solr|esmon|visinaming.b|svc-.*-|scp-.-'|awk '{print $2}'`; do echo "$i :kernel’s neighbour table cache garbage collector limits";/root/rvb/bin/ssh_to_vm_and_su_root.exp $i "sysctl -w net.ipv4.neigh.default.gc_thresh1=1024;sysctl -w net.ipv4.neigh.default.gc_thresh2=2048;sysctl -w net.ipv4.neigh.default.gc_thresh3=4096;sysctl -w net.ipv6.neigh.default.gc_thresh1=1024;sysctl -w net.ipv6.neigh.default.gc_thresh2=2048;sysctl -w net.ipv6.neigh.default.gc_thresh3=4096";sleep 1;done
+
+echo "visinamingnb"
+/root/rvb/bin/ssh_to_vm_and_su_root.exp visinamingnb "sysctl -w net.ipv4.neigh.default.gc_thresh1=1024;sysctl -w net.ipv4.neigh.default.gc_thresh2=2048;sysctl -w net.ipv4.neigh.default.gc_thresh3=4096;sysctl -w net.ipv6.neigh.default.gc_thresh1=1024;sysctl -w net.ipv6.neigh.default.gc_thresh2=2048;sysctl -w net.ipv6.neigh.default.gc_thresh3=4096"

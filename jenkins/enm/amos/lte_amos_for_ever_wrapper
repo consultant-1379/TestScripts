@@ -1,0 +1,28 @@
+### Filename: lte_amos_for_ever_wrapper.txt 
+### This cmd file is called by mobatch      #####################
+### Use the -v option to feed the cmdfile and duration to this wrapper
+#################################################################
+#Will assign $duration at calling of mobatch with the -v option
+#$duration = 10
+$start_date = `date +%y%m%d`
+$start_hour = `date +%H`
+$start_min = `date +%M`
+$start_hour_mins = $start_hour * 60
+$start_time = $start_hour_mins + $start_min
+for ever
+wait 20
+run $cmdfile
+$date = `date +%y%m%d`
+$hour = `date +%H`
+$min = `date +%M`
+$hour_mins = $hour * 60
+$time = $hour_mins + $min
+$time_of_for = $time - $duration
+### If the date has changed or the loop has run for longer than $duration break out of for ever.
+if $date != $start_date
+        break
+else if $time_of_for >= $start_time
+        break
+fi
+done
+

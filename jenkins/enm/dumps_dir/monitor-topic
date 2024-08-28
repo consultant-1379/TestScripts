@@ -1,0 +1,70 @@
+#!/bin/bash
+
+#DEFAULTS DECLARATION
+INTERVAL=30
+TOPIC="Clustered-dps-notification-event"
+LOG_PATH="/ericsson/enm/dumps"
+NUM_ITERATIONS=60
+
+function print_defaults(){
+    echo "DEFAULTS:"
+    echo "    Topic=${TOPIC}"
+    echo "    Log File Path=${LOG_PATH}"
+    echo "    ITERATIONS=${NUM_ITERATIONS}"
+    echo "    INTERVAL=${INTERVAL}"
+}
+
+function print_help(){
+    echo ""
+    echo "USAGE"
+    echo "Must be run from the DB blade JMS is running on, recommend to pipe to background process"
+    echo "$0 [-t TOPIC NAME] [-i INTERVAL(s)] [-p [PATH (no trailing '/']] [-n ITERATIONS]"
+    echo ""
+    echo "Example:"
+    echo "    $0 -t ${TOPIC} -p ${LOG_PATH} -i 60 -n 60 &"
+    echo ""
+    echo "Will monitor the DPS topic in the background, taking a measurement once a minute 60 times (1 hour)"
+    echo "For any argument not passed the following defaults will apply:"
+    echo ""
+    print_defaults
+    echo ""
+}
+
+
+if [ $# -lt 1 ]; then
+    echo ""
+    echo "No arguments given, proceeding with defaults\n"
+    echo ""
+    print_defaults
+fi
+
+
+
+while getopts "t:i:p:n:h" opt;
+do
+    case ${opt} in
+        t ) ${TOPIC}=${OPTARG} ;;
+        i ) ${INTERVAL}=${OPTARG} ;;
+        p ) ${LOG_PATH}=${OPTARG} ;;
+        n ) NUM_ITERATIONS=${OPTARG} ;;
+        h ) print_help; exit 0 ;;
+        \?) echo "Invalid option: -$OPTARG" >&2;exit 1;;
+    esac
+done
+
+
+for count in $(seq 0 ${NUM_ITERATIONS})
+do
+    date >> ${LOG_PATH}/message-count.log
+    date >> ${LOG_PATH}/list-of-subscribers.log
+
+    /ericsson/3pp/jboss/bin/jboss-cli.sh -c "/subsystem=messaging/hornetq-server=default/jms-topic=${TOPIC}/:read-resource(recursive=false,proxies=false,include-runtime=true,include-defaults=true)" >> ${LOG_PATH}/message-count.log
+    /ericsson/3pp/jboss/bin/jboss-cli.sh -c "/subsystem=messaging/hornetq-server=default/jms-topic=${TOPIC}:list-all-subscriptions()" >> ${LOG_PATH}/list-of-subscribers.log
+
+    if (( ${count} % 11 == 0 ))
+    then
+        date >> /ericsson/enm/dumps/subscription-ips
+        /ericsson/3pp/jboss/bin/jboss-cli.sh -c "/subsystem=messaging/hornetq-server=default:list-connections-as-json" >> ${LOG_PATH}/subscription-ips
+    fi
+    sleep ${INTERVAL}
+done

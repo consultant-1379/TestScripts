@@ -1,0 +1,431 @@
+#!/bin/bash
+#
+# Script to put the details in some readable order from the bpdbjobs -all_columns output.
+# Currently this script is only being concentrated on the backups.
+# Restore jobs are yet to come as an update to this script later.
+# Functionality is this script uses another script bpdbjobs_parser.py which will fecth the records and put into a file
+# we would need this file in order to put them in some order.
+# #############################################################################
+
+bld_req_files()
+{
+	_job_file_=${1}
+	_img_file_=${2}
+	if [ ! -f "${_job_file_}" ];then
+		bld_bpdbjobsfile
+		cat ${_bpdbjobs_file} > ${allcol_file} 2>/dev/null
+	else
+		allcol_file="${_job_file_}"
+		sort_file "${allcol_file}"
+	fi
+	
+	if [ ! -f "${_img_file_}" ];then
+		/usr/openv/netbackup/bin/admincmd/bpimagelist -d 01/01/2000 00:00:00  >>${back_ids_file}
+	else
+		back_ids_file="${_img_file_}"
+	fi
+	sort_file "${back_ids_file}"
+}
+
+chk_instance()
+{
+	_mypid_=$$
+        /usr/ucb/ps -awuxx | /usr/sfw/bin/gegrep -w "${_script_}" | /usr/sfw/bin/gegrep -v "gegrep|${_mypid_}" >/dev/null 2>&1
+        if [ $? -eq 0 ];then
+                echo "Jobs Parser script is already running"
+		rm -rf ${temp_dir}
+                exit 1
+        fi
+}
+
+sort_file()
+{
+	_file_=${1}
+	sort -u ${_file_} >${_file_}.tmp 2>/dev/null
+	cp ${_file_}.tmp ${_file_} 2>/dev/null
+	rm ${_file_}.tmp 2>/dev/null
+}
+
+bld_bpdbjobsfile()
+{
+	${_bpdbjobs_} -all_columns -append -file ${_bpdbjobs_file} 2>/dev/null
+	sort_file "${_bpdbjobs_file}"
+}
+
+bld_fmt_file()
+{
+	echo "jobid
+jobtype
+subtype
+state
+status
+sched
+client
+start
+elapsed
+end
+kbytes
+files
+retention_period
+filelistcount
+parentjob
+kbpersec
+stream
+backupid
+class
+stream" > ${fmt_file}
+}
+
+bld_out_file()
+{
+	#echo -e "Job ID,Client name,Amount of data written in kilobytes,Number of files written,Job started time,Transfer Rate KB/s,Elapsed time for the job,Actual Write time for the Job,Job end time,File paths written, Policy name, Backup ID, Keyword, Stream Number" > ${_out_file1_}
+	echo -e "Job ID,Client name,Amount of data written in kilobytes,Number of files written,Job started time,Transfer Rate KB/s,Actual Transfer Rate KB/s,Elapsed time for the job,Actual Write time for the Job,Job end time,File paths written, Policy name, Backup ID, Keyword, Stream Number,Actual Backup Start time,Actual Backup end time" > ${_out_file_}
+
+	for _backup_id_ in `cat ${back_ids_file} | /usr/sfw/bin/gegrep "^IMAGE " | nawk '{print $6}'`; do
+
+		_job_typ_=`cat ${parsed_file} |/usr/sfw/bin/gegrep -w "${_backup_id_}" |nawk -F"," '{print $2}'`
+		if [ "${_job_typ_}" != "0" ];then
+                	continue
+        	fi
+		
+
+		_backup_image_info_=`cat ${back_ids_file} | /usr/sfw/bin/gegrep "^IMAGE " | /usr/sfw/bin/gegrep -w "${_backup_id_}" 2>/dev/null`
+		_keyword_="`echo ${_backup_image_info_} | nawk '{print $32}'`"
+		if [ ! -z "${keyword}" ];then
+			if [ "${_keyword_}" != "${keyword}" ];then
+				continue
+			fi
+		fi
+        	#_bak_typ_=`cat ${parsed_file} |/usr/sfw/bin/gegrep -w "${_backup_id_}" |nawk -F"," '{print $3}'`
+        	#if [ "${_bak_typ_}" != "2" ];then
+        	#       continue
+        	#fi
+		_jobid_=`cat ${parsed_file} |/usr/sfw/bin/gegrep -w "${_backup_id_}" |nawk -F"," '{print $1}'`
+		_job_stat_=`cat ${allcol_file} |/usr/sfw/bin/gegrep -w "^${_jobid_}"|/usr/sfw/bin/gegrep "${_backup_id_}" |nawk -F"," '{print $3}'`
+        	if [ "${_job_stat_}" != "3" ];then
+			continue
+		fi
+	        _job_details_=`cat ${parsed_file} |/usr/sfw/bin/gegrep "${_backup_id_}" \
+       		       |nawk -F"," '{print $7","$11","$12","$8","$9","$10","$19","$20}'`
+			## _client_,_amt_data_,_num_files_,_epoch_num_start_,_secs_taken_,_epoch_num_end_,_policy_name_,_stream_
+        	_client_=`echo -e ${_job_details_}|nawk -F"," '{print $1}'`
+        	_amt_data_=`echo -e ${_job_details_}|nawk -F"," '{print $2}'`
+        	_num_files_=`echo -e ${_job_details_}|nawk -F"," '{print $3}'`
+
+        	_epoch_num_start_=`echo -e ${_job_details_}|nawk -F"," '{print $4}'`
+        	_start_date_=`perl -e "print scalar(localtime(${_epoch_num_start_}))"`
+
+        	_secs_taken_=`echo -e ${_job_details_}|nawk -F"," '{print $5}'| sed 's/^0*//'`
+        	_time_taken_=`convert_secs ${_secs_taken_}`
+
+        	_epoch_num_end_=`echo -e ${_job_details_}|nawk -F"," '{print $6}'`
+        	_end_date_=`perl -e "print scalar(localtime(${_epoch_num_end_}))"`
+
+		_field_32_="`cat ${allcol_file} |/usr/sfw/bin/gegrep -w "^${_jobid_}"|nawk -F"," '{print $32}'`"
+		_fs_end_field_=$(($_field_32_ + 32))
+		_file_path_="`cat ${allcol_file} |/usr/sfw/bin/gegrep -w "^${_jobid_}" | nawk -F"," -v _end_field_=$_fs_end_field_  '{for(_no_fs_=33;_no_fs_<=_end_field_;++_no_fs_)print $_no_fs_}' | xargs`"
+        	_policy_name_=`echo -e ${_job_details_}|nawk -F"," '{print $7}'`
+		_stream_=`echo -e ${_job_details_}|nawk -F"," '{print $8}'`
+		
+		_act_backup_start_time_=`cat ${allcol_file} |/usr/sfw/bin/gegrep -w "^${_jobid_}" | nawk -F" - begin writing," '{print $1}' | nawk -F"," '{print $NF}'`
+		_act_backup_end_time_=`cat ${allcol_file} |/usr/sfw/bin/gegrep -w "^${_jobid_}" | nawk -F" - end writing;" '{print $1}' | nawk -F"," '{print $NF}'`
+		_act_write_time_=`cat ${allcol_file} |/usr/sfw/bin/gegrep -w "^${_jobid_}" | nawk -F"write time:" '{print $NF}' | nawk -F"," '{print $1}'`
+		_act_write_time_secs_=`convert_numof_secs $_act_write_time_`
+		_act_write_time_fmt_=`convert_secs $_act_write_time_secs_`
+		if [ "${_act_write_time_secs_}" != "0" ];then
+			_act_trans_rate_=$(($_amt_data_ / $_act_write_time_secs_))
+		else
+			_act_trans_rate_="0"
+		fi
+		
+        _trans_rate_=`cat ${parsed_file} |/usr/sfw/bin/gegrep -w "${_backup_id_}"| nawk -F"," '{print $16}'`
+
+		echo -e "${_jobid_},${_client_},${_amt_data_},${_num_files_},${_start_date_},${_trans_rate_},${_act_trans_rate_},${_time_taken_},${_act_write_time_fmt_},${_end_date_},${_file_path_},${_policy_name_},${_backup_id_},${_keyword_},${_stream_},${_act_backup_start_time_},${_act_backup_end_time_}">> ${_out_file_}
+
+		echo -e "${_jobid_},${_client_},${_amt_data_},${_num_files_},${_epoch_num_start_},${_trans_rate_},${_secs_taken_},${_act_write_time_},${_epoch_num_end_},${_file_path_},${_policy_name_},${_backup_id_},${_keyword_},${_stream_},${_act_backup_start_time_},${_act_backup_end_time_}">> ${_out_file1_}
+
+	done
+}
+
+convert_secs()
+{
+	local _tot_secs_=$1
+
+	_hrs_=$((_tot_secs_ / 3600))
+	_secs_=$((_tot_secs_ % 3600))
+	_mins_=$((_secs_ / 60))
+	_seconds_=$((_secs_ % 60))
+
+	echo "${_hrs_}:${_mins_}:${_seconds_}"
+}
+
+convert_numof_secs()
+{
+	local _time_="$1"
+	_secs_=`echo $_time_ | nawk -F":" '{print $3}'| nawk '{printf ("%.0f\n",  $1)}'`
+	_mins_=`echo $_time_ | nawk -F":" '{print $2}'| nawk '{printf ("%.0f\n",  $1)}'`
+	_hrs_=`echo $_time_ | nawk -F":" '{print $1}'| nawk '{printf ("%.0f\n",  $1)}'`
+
+	_mins_to_sec_=$(($_mins_ * 60))
+	_hrs_to_sec_=$(($_hrs_ * 60 * 60))
+	echo `expr $_mins_to_sec_ + $_hrs_to_sec_ + $_secs_`
+}
+
+disp_all_client()
+{
+	for _client_ in `cat ${_out_file1_} | grep -v Client |nawk -F"," '{print $2}'| sort -u`; do
+		echo
+		echo -e "Job ID,Fs List,No of Files,Size of filesystem,Start time for Job,Actual backup start time,End time for Job,Actual backup end time,Elapsed time for Job,Actual written time,Speed of Backup,Actual write speed" >${_client_outfile_}.${_client_}.csv
+		disp_client ${_client_}
+	done
+}
+
+disp_client()
+{
+	client_name=${1}
+	echo "Stats for client : ${client_name}"
+	while read _line_
+	do
+	
+		client=`echo "${_line_}" | nawk -F"," '{print $2}'`
+		if [ "${client}" != "${client_name}" ];then
+           	continue
+        fi
+        echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $1}' >>${temp_dir}/${client_name}.jobids
+		echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $10}' >>${temp_dir}/${client_name}.filesystemlist
+		echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $12}' >>${temp_dir}/${client_name}.backupids
+		echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $4}' >>${temp_dir}/${client_name}.files
+		echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $3}' >>${temp_dir}/${client_name}.size
+		echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $5}' >>${temp_dir}/${client_name}.starttime
+		echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $9}' >>${temp_dir}/${client_name}.endtime
+		echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $10,$4}' >>${temp_dir}/${client_name}.fs_files
+		echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $8,$3}' >>${temp_dir}/${client_name}.acttime_kb
+		
+		jb_id=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $1}'`
+		fs_lst=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $10}'`
+		no_fls=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $4}'`
+		amt_sz=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $3}'`
+		st_tm=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $5}'`
+		ed_tm=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $9}'`
+		ac_el=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $8}'`
+		sp_bk=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $6}'`
+		ac_st=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $15}'`
+		ac_et=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $16}'`
+		el_tm=`echo "${_line_}" | nawk -F"," -v id=${client_name} '{if($2 == id)print $7}'`
+		el_tm=`convert_secs ${el_tm}`
+
+		st_tm=`perl -e "print scalar(localtime(${st_tm}))"`
+		ed_tm=`perl -e "print scalar(localtime(${ed_tm}))"`
+		ac_el=`convert_numof_secs $ac_el`
+		if [ "${ac_el}" != "0" ];then
+			ac_sp=$(($amt_sz / $ac_el))
+		else
+			ac_sp="0"
+		fi
+		ac_el=`convert_secs $ac_el`
+		echo -e "${jb_id},${fs_lst},${no_fls},${amt_sz},${st_tm},${ac_st},${ed_tm},${ac_et},${el_tm},${ac_el},${sp_bk},${ac_sp}">>${_client_outfile_}.${client_name}.csv
+		
+	done <${_out_file1_}
+	_job_ids_="`cat ${temp_dir}/${client_name}.jobids|xargs`"
+	_fs_list_="`cat ${temp_dir}/${client_name}.filesystemlist`"
+	_backup_ids_="`cat ${temp_dir}/${client_name}.backupids`"
+
+	_noof_files_=0
+	while read num
+	do
+		_noof_files_=$(($_noof_files_ + $num))
+	done < ${temp_dir}/${client_name}.files
+		
+	_size_of_system_=0
+	while read num
+	do
+		_size_of_system_=$(($_size_of_system_ + $num))
+	done < ${temp_dir}/${client_name}.size
+
+	_start_time_="`cat ${temp_dir}/${client_name}.starttime | sort | head -1`"
+	_end_time_="`cat ${temp_dir}/${client_name}.endtime | sort -r | head -1`"
+	_elapse_time_=$(($_end_time_ - $_start_time_))
+	_trans_rate_=$(($_size_of_system_ / $_elapse_time_ / 1024))
+	_start_time_=`perl -e "print scalar(localtime(${_start_time_}))"`
+	_end_time_=`perl -e "print scalar(localtime(${_end_time_}))"`
+	_elapse_time_=`convert_secs ${_elapse_time_}`
+
+	printf "\n"
+	printf "%-30s %-15s\n" "Client:" "${client_name}"
+	printf "%-30s %-115s\n" "Job IDs:" "${_job_ids_}"
+	printf "%-30s %-15s\n" "Data written(KB):" "${_size_of_system_}"
+	printf "%-30s %-15s\n" "Total No. of files:" "${_noof_files_}"
+	printf "%-30s %-15s\n" "Start time:" "${_start_time_}"
+	printf "%-30s %-15s\n" "Transfer Rate(MB/s):" "${_trans_rate_} MB/Sec"
+	printf "%-30s %-15s\n" "Elapsed time:" "${_elapse_time_}"
+	printf "%-30s %-15s\n" "End time:" "${_end_time_}"
+	print_fmt "File paths:" "${_fs_list_}"
+	printf "%-30s %-15s\n" "Policy name:" "${_policy_name_}"
+	print_fmt "Backup ID:" "${_backup_ids_}"
+	printf "%-30s %-15s\n" "Keyword:" "${keyword}"
+}
+
+disp_per_keyword()
+{
+	clear
+	echo "Displaying the stats for the backups with Keyword:  ${keyword}"
+	echo 
+	cat ${_out_file1_} | grep -v Client |nawk -F"," '{print $2}'| sort -u >>${temp_dir}/${keyword}.clients
+	while read _line_
+	do
+		echo "${_line_}" | nawk -F"," -v id=${keyword} '{if($13 == id)print $4}' >>${temp_dir}/${keyword}.files
+		echo "${_line_}" | nawk -F"," -v id=${keyword} '{if($13 == id)print $3}' >>${temp_dir}/${keyword}.size
+		echo "${_line_}" | nawk -F"," -v id=${keyword} '{if($13 == id)print $5}' >>${temp_dir}/${keyword}.starttime
+		echo "${_line_}" | nawk -F"," -v id=${keyword} '{if($13 == id)print $9}' >>${temp_dir}/${keyword}.endtime
+	done <${_out_file1_}
+
+	_clients_="`cat ${temp_dir}/${keyword}.clients`"
+
+	_noof_files_=0
+	while read num
+	do
+		_noof_files_=$(($_noof_files_ + $num))
+	done < ${temp_dir}/${keyword}.files
+
+	_size_of_system_=0
+	while read num
+	do
+		_size_of_system_=$(($_size_of_system_ + $num))
+	done < ${temp_dir}/${keyword}.size
+
+	_start_time_="`cat ${temp_dir}/${keyword}.starttime | sort | head -1`"
+	_end_time_="`cat ${temp_dir}/${keyword}.endtime | sort -r | head -1`"
+	_elapse_time_=$(($_end_time_ - $_start_time_))
+	_trans_rate_=$(($_size_of_system_ / $_elapse_time_ / 1024))
+	_start_time_=`perl -e "print scalar(localtime(${_start_time_}))"`
+	_end_time_=`perl -e "print scalar(localtime(${_end_time_}))"`
+	_elapse_time_=`convert_secs ${_elapse_time_}`
+	printf "\n"
+	print_fmt "Clients:" "${_clients_}"
+	printf "%-30s %-15s\n" "Data written(KB):" "${_size_of_system_}"
+	printf "%-30s %-15s\n" "No. of files:" "${_noof_files_}"
+	printf "%-30s %-15s\n" "Start time:" "${_start_time_}"
+	printf "%-30s %-15s\n" "Transfer Rate(MB/s):" "${_trans_rate_} MB/Sec"
+	printf "%-30s %-15s\n" "Elapsed time:" "${_elapse_time_}"
+	printf "%-30s %-15s\n" "End time:" "${_end_time_}"
+	printf "%-30s %-15s\n" "Policy name:" "${_policy_name_}"
+	printf "%-30s %-15s\n" "Keyword:" "${keyword}"
+}
+
+parse_allcol()
+{
+	python ${bpdbjobs_parser} -f ${fmt_file} ${allcol_file} | grep -v "^JOBID" >${parsed_file}	
+}
+
+print_fmt()
+{
+	n=0
+	for _entry_ in `echo ${2}`;do
+		if [ ${n} -eq 0 ]; then
+			printf "%-30s %-15s\n" "${1}" "${_entry_}"
+			n=1
+		else
+			printf "%-30s %-15s\n" "     " "${_entry_}"
+		fi
+	done
+}
+
+
+usage_msg()
+{
+	echo "Usage: ./`basename $0` [-c <clientname|ALL>] [-k <keyword>]"
+}
+
+### Main ###
+_dir_=`dirname $0`
+_script_=`basename $0`
+_script_home_=`cd $_dir_ 2>/dev/null && pwd || echo $_dir_`
+temp_dir=/tmp/bpdbjobs.$$
+bpdbjobs_parser=${_script_home_}/bpdbjobs_parser.py
+fmt_file=${temp_dir}/format
+allcol_file=${temp_dir}/allcol_file
+parsed_file=${temp_dir}/parsed_file
+back_ids_file=/usr/openv/netbackup/db/.backup_ids_file
+_bpdbjobs_=/usr/openv/netbackup/bin/admincmd/bpdbjobs 
+_bpdbjobs_file=/usr/openv/netbackup/db/.bpdbjobs_append
+_out_file_=${_script_home_}/out_file.csv
+_client_outfile_=${_script_home_}/outfile
+_out_file1_=${temp_dir}/out_file1.csv
+
+
+while getopts ":c:k:b:i:" arg;do
+        case ${arg} in
+		b)	bpdbfile="$OPTARG"
+			;;
+		c)  client_name="$OPTARG"
+			client_tag="YES"
+			if [ -z ${client_name} ];then
+				usage_msg
+				exit 1
+			fi
+			;;
+		i)	imagefile="$OPTARG"
+			;;
+		k)  keyword="$OPTARG"
+			keyword_tag="YES"
+            ;;
+        \?) usage_msg
+			exit 
+			;;
+        esac
+done
+shift `expr $OPTIND - 1`
+
+mkdir ${temp_dir}
+
+if [ ! -f ${bpdbjobs_parser} ];then
+	echo "There is no [ ${bpdbjobs_parser} ] script available in [ ${_script_home_} ] directory."
+	rm -rf ${temp_dir}
+	exit 1
+fi	
+
+chk_instance
+bld_fmt_file
+
+bld_req_files "${bpdbfile}" "${imagefile}"
+if [ "${client_name}" != "ALL" -a "${client_tag}" == "YES" ]; then
+	cat ${back_ids_file} 2>/dev/null | /usr/sfw/bin/gegrep "^IMAGE " |/usr/sfw/bin/gegrep "[[:blank:]]+${client_name}[[:blank:]]" >/dev/null 2>&1
+	if [ ${?} -ne 0 ]; then
+		echo "There is no client with the name [ ${client_name} ]."
+		rm -rf ${temp_dir}
+		exit 1
+	fi
+fi
+if [ ! -z "${keyword}" -a "${keyword_tag}" == "YES" ]; then
+	cat ${back_ids_file} 2>/dev/null | /usr/sfw/bin/gegrep "^IMAGE" |/usr/sfw/bin/gegrep "[[:blank:]]+${keyword}[[:blank:]]" >/dev/null 2>&1
+	if [ ${?} -ne 0 ]; then
+		echo "There is no backups with the keyword [ ${keyword} ]."
+		rm -rf ${temp_dir}
+		exit 1
+	fi
+fi
+
+parse_allcol
+
+bld_out_file
+
+if [ ! -f ${_out_file1_} ];then
+	echo "No backup records found with the options specified"
+	rm -rf ${temp_dir}
+	exit 1
+fi
+
+if [ "${client_name}" == "ALL" ] && [ ! -z "${keyword}" ]; then
+	disp_per_keyword
+	echo "------------------------------------------------------------------"
+	disp_all_client
+elif [ ! -z "${client_name}" ] && [ "${client_name}" != "ALL" ] && [ ! -z "${keyword}" ]; then
+	disp_client ${client_name}
+elif [ "${client_name}" == "ALL" ];then
+	disp_all_client
+elif [ ! -z "${keyword}" ]; then
+	disp_per_keyword
+fi
+
+rm -rf ${temp_dir}
+exit 0

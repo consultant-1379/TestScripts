@@ -1,0 +1,4 @@
+#!/bin/bash
+
+bash -c "exec 3>/dev/cpu_dma_latency; echo -ne '\0010\000\000\000' >&3; sleep inf" & disown
+sed -i.bck '/^[^#] *kernel/s/$/ intel_idle.max_cstate=1/' /boot/grub/grub.conf

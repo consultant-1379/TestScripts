@@ -1,0 +1,9 @@
+node_type,simulation_regex,ipv6_supported,snmp_args_for_autoconfig
+LTE_CPP,LTE[A-Z].*,true,
+LTE_DG2,LTE.*DG2,true,-snmp_port 161 -snmp_versions 2 -snmp_communities public -snmp_user mediation:authpass:privpass:none:none -trans_protocol tls
+WRAN_CPP,RNC.*-RBS,false,
+WRAN_DG2,RNC.*-MSRBS,true,-snmp_port 161 -snmp_versions 1 2 3 -snmp_communities public -snmp_user mediation:authpass:privpass:none:none -trans_protocol tls
+SGSN,SGSN,true,-snmp_port 25161 -snmp_versions 2 -snmp_communities public -snmp_user mediation:authpass:privpass:none:none
+MLTN,ML,false,-snmp_port 161 -snmp_versions 3 -snmp_communities public private trap -snmp_user autPrivSHA1DES:ericsson:ericsson:sha1:des -snmp_user admin_user:ericsson:no_value:md5:none -snmp_user authPrivMD5DES:ericsson:ericsson:md5:des -snmp_user oper_user:ericsson:ericsson:md5:none -snmp_user view_user:ericsson:ericsson:md5:none -snmp_user control_user:ericsson:ericsson:md5:none -snmp_user authNoPrivMD5None:ericsson:no_value:md5:none -snmp_user authNoPrivSHA1None:ericsson:ericsson:sha1:none -snmp_user noAuthPriv:ericsson:ericsson:none:none
+MGw,MGw,false,
+SpitFire,SpitFire,false,-snmp_port 161 -snmp_versions 1 2 3 -snmp_communities public -snmp_user mediation:authpass:privpass:none:none -trans_protocol ssh

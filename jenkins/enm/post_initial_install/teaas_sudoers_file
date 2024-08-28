@@ -1,0 +1,10 @@
+Cmnd_Alias VM_CONNECTIVITY = /usr/bin/ssh, /usr/bin/scp
+Cmnd_Alias ENMINST = /opt/ericsson/enminst/bin/enm_healthcheck.sh, /opt/ericsson/enminst/bin/enm_version.sh, /opt/ericsson/enminst/bin/vcs.bsh
+Cmnd_Alias ENMUTILS = /opt/ericsson/enmutils/bin/cli_app, /opt/ericsson/enmutils/bin/data_migration_cli, /opt/ericsson/enmutils/bin/netsim, /opt/ericsson/enmutils/bin/network, /opt/ericsson/enmutils/bin/user_migration_cli
+Cmnd_Alias PIB = /ericsson/pib-scripts/etc/
+Cmnd_Alias MISC = /usr/bin/tail, /usr/bin/wget, /bin/ls
+Cmnd_Alias SHELLS = /bin/*sh, /bin/su
+Cmnd_Alias SHELL_ESCAPES = /usr/bin/*vim, /bin/vi, /bin/more, /usr/bin/less
+
+%privileged_testers ALL=(root) NOPASSWD: ALL, !SHELLS, NOEXEC: SHELL_ESCAPES
+%testers ALL=(root) NOPASSWD: VM_CONNECTIVITY, ENMINST, ENMUTILS, PIB, MISC

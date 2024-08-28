@@ -1,0 +1,7 @@
+{0}
+
+Please post the target ENM ISO that the server will be upgraded to ASAP the morning of the planned weekly upgrade.
+
+If you have RPMs to be included in the weekly upgrade, please provide a link to green kgb+n upgrade job with the RPMs to be included in the table in this ticket's Description box.
+
+Please check and confirm the RPMs are compatible with the Target ISO, rebased at near ISO green, for the ENM ISO weekly upgrade, which is typically a higher version than is available in kgb+n.

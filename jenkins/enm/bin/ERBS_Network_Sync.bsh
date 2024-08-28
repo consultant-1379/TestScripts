@@ -1,0 +1,19 @@
+#!/bin/bash
+
+TITLE="CM: ERBS Network Sync"
+TAG="ERBS Network Sync"
+CLI_APP=/opt/ericsson/enmutils/bin/cli_app
+FILE=/ericsson/enm/dumps/.upgrade_ongoing
+
+sync_nodes(){
+if [ ! -f ${FILE} ] ; then
+         logger INFO "${TAG}" "Syncing all ERBS"
+         ${CLI_APP} "cmedit action * CmFunction sync -ne=ERBS"
+else
+        logger INFO "${TAG}" "upgrade ongoing not running testcase"
+fi
+
+}
+
+
+sync_nodes

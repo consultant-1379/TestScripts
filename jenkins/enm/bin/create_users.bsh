@@ -1,0 +1,28 @@
+#!/bin/bash
+
+if [ $(getent group endurance_testers) ]; then
+  echo "endurance_testers group exists."
+else
+  echo "group does not exist."
+  echo "creating group endurance_testers"
+  /usr/sbin/groupadd -f endurance_testers
+  cp /root/rvb/post_initial_install/alias.sh /etc/profile.d/alias.sh
+fi
+
+FILE=/root/rvb/bin/users.txt
+if [ -f $FILE ]; then
+   for i in `cat $FILE`
+   do
+        test="$(grep ^${i}: /etc/passwd)"
+        if [ -n "${test}" ]; then
+           echo "User ${i} is already on the system"
+        else
+
+           /usr/sbin/useradd -g endurance_testers -m $i
+           echo $i | passwd --stdin $i
+           chage -d 0 $i
+        fi
+   done
+else
+   echo "File $FILE does not exist. cp users_template.txt users.txt for whitestar userids"
+fi

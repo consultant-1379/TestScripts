@@ -1,0 +1,11 @@
+#!/bin/bash
+
+
+
+#Reset br0 values to expected, hash_max updated to 4096
+
+for i in {1..10};do /root/rvb/bin/ssh_to_vm_and_su_root.exp svc-$i "ifconfig br0;sleep 2;echo 1 >! /sys/class/net/br0/bridge/multicast_querier;echo 1 >! /sys/class/net/br0/bridge/multicast_snooping;echo 2 >! /sys/class/net/br0/bridge/multicast_router;echo 4096 >! /sys/class/net/br0/bridge/hash_max;sleep 3;cat /sys/class/net/br0/bridge/multicast_querier;cat /sys/class/net/br0/bridge/multicast_snooping ;cat /sys/class/net/br0/bridge/multicast_router; cat /sys/class/net/br0/bridge/hash_max";done
+
+sleep 10;
+# Clear ipv6 Routing Table
+for i in {1..10};do /root/rvb/bin/ssh_to_vm_and_su_root.exp svc-$i "ip -6 route del ff02::/64 table local";/root/rvb/bin/ssh_to_vm_and_su_root.exp svc-$i "ip -6 route del ff02::/8 table local"; /root/rvb/bin/ssh_to_vm_and_su_root.exp svc-$i "ip -6 route show table local";done

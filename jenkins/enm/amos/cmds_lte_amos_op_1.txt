@@ -1,0 +1,5 @@
+ll
+wait 5
+#dcgm
+dcgkf
+wait 600

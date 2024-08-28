@@ -1,0 +1,114 @@
+#!/bin/bash
+SIM_LIST=(`/opt/ericsson/enmutils/bin/cli_app "cmedit get *LTE* NetworkElement" | grep -v "dg2" | awk '{print $3}' | awk -F'=' '{print $2}' | awk -F'ERBS' '{print $1}' | uniq`)
+CLI_APP=/opt/ericsson/enmutils/bin/cli_app
+SEARCH_STRING=
+NODE_LIST=()
+SHM_LIST=()
+SYNC=0
+UNSYNC=0
+LOOP=0
+
+function getSHM_LIST() {
+index=0
+for SIM in ${SIM_LIST[@]} 
+        do 
+                        MC=$(echo $SIM | awk -F'_' '{print $1}');
+                        if [ "$MC" != "$LAST_MC" ]; then
+                                #echo $SIM;
+                                NODE_LIST[index]=$SIM
+                                ((index++))
+                                LAST_MC=$MC;
+                        fi
+        done
+#echo "Node list amount ${#NODE_LIST[@]}"
+#echo "${NODE_LIST[@]}"
+
+        for (( x=0; x<8; x++ )); do
+                SHM_LIST[x]=${NODE_LIST[$x]} 
+                SEARCH_STRING+=${NODE_LIST[$x]}
+                                if [ $x -ne 7 ]; then 
+                                                SEARCH_STRING+="|"
+                                fi
+        done
+
+        if      [ ${#SHM_LIST[@]} -eq 0 ]
+                then
+                        echo "Fault:SHM_LIST is empty !!!"
+                        exit
+                else
+                        echo "Selected nodes from SHM_List are: ${SHM_LIST[@]}"
+                        echo " The search string is : ${SEARCH_STRING}"
+        fi      
+}
+
+function DISABLE_SHM_SUPERVISION() {
+        echo "DISABLE_SHM_SUPERVISION for 1280"
+        for node in "${SHM_LIST[@]}"
+                        do
+                                        echo "setting node : ${CLI_APP} 'cmedit set ${node}* InventorySupervision active=false'"
+                                        ${CLI_APP} "cmedit set ${node}* InventorySupervision active=false" | egrep "instance"
+                        done
+        echo "Finished DISABLE_SHM_SUPERVISION"
+}
+
+function ENABLE_SHM_SUPERVISION() {
+        echo "ENABLE_SHM_SUPERVISION for 1280"
+        for node in "${SHM_LIST[@]}"
+                        do
+                                        echo "setting node : ${CLI_APP} 'cmedit set ${node}* InventorySupervision active=true'"
+                                        ${CLI_APP} "cmedit set ${node}* InventorySupervision active=true"| egrep "instance"
+                        done
+        echo "Finished ENABLE_SHM_SUPERVISION"
+}
+
+function GET_NUM_UNSYNC_NODES() {
+        echo " Checking UNSYNC"
+        UNSYNC=$(${CLI_APP} 'cmedit get * InventoryFunction.syncStatus==UNSYNCHRONIZED' | egrep -c "${SEARCH_STRING}")
+        echo "Number unsynch is ${UNSYNC}"
+}
+
+function GET_NUM_SYNC_NODES() {
+        echo " Checking SYNC"
+        SYNC=$(${CLI_APP} 'cmedit get * InventoryFunction.syncStatus==SYNCHRONIZED' | egrep -c "${SEARCH_STRING}")
+        echo "Number synch is ${SYNC}"
+}
+
+function TEST_KPI(){
+date
+                echo "====================================================================================="
+                echo "Start of SHM STKPI Inventory Backup for 1280 nodes"
+                echo "*************************************************************************************"
+                DISABLE_SHM_SUPERVISION
+                GET_NUM_UNSYNC_NODES
+                START=$(date +%s)
+                ENABLE_SHM_SUPERVISION
+                END=$(date +%s);
+               ## TIME=$(date -u -d "0 ${END} seconds - ${START} seconds" +"%H:%M:%S")
+                echo "*****Waiting for results****"                      
+                                while [ $SYNC -lt 1280 ] && [ $LOOP -lt 30 ] 
+                                        do 
+                                        let LOOP=LOOP+1
+                                        echo "Waiting 60 seconds....."
+                                        sleep 60
+                                        GET_NUM_SYNC_NODES
+                                        INTERVAL=$(date +%s);
+                                        IT=$(date -u -d "0 ${INTERVAL} seconds - ${START} seconds" +"%H:%M:%S")
+                                        echo "Interval time taken for ${SYNC} nodes out of 1280 NODES is ${IT} "
+                                        done
+
+                                echo "*************************************************************************************"
+                echo "SHM INVENTORY SYNC HAS BEEN SUCCESSFUL FOR ${SYNC} nodes out of 1280 NODES in ${TIME}"
+                echo "====================================================================================="
+        date
+}
+
+echo "In main"
+getSHM_LIST
+TEST_KPI
+
+#GET_NUM_UNSYNC_NODES
+#GET_NUM_SYNC_NODES
+#DISABLE_SHM_SUPERVISION
+#ENABLE_SHM_SUPERVISION
+
+echo "Finished"

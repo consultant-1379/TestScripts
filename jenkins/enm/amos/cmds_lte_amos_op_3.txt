@@ -1,0 +1,46 @@
+#lt all
+#confb
+acc ip listroutes
+wait  5
+al
+wait 20
+alt
+wait  5
+confl
+wait 20
+####cr   rncfunction=1,iublink=999
+####1
+####atm=1,ipv4=0
+####atm=1,ipv4=0
+####d
+####d
+
+#cr enodebfunction=1,TermPointtoMme=99
+
+wait 5
+## Doesn't do much
+hget reliableprogramuniter slot|operational slot=10
+wait 20
+## Doesn't do much
+lacc ip listroutes
+y
+wait  5
+confd
+###ldel rncfunction=1,iublink=999$
+
+#ldel enodebfunction=1,TermPointtoMme=99
+confd
+wait 20
+## lgs doesn't do much.lga parses alarm log
+lgs
+wait  5
+###lh
+wait 20
+pget atmport= pm
+wait  5
+pmr -m 0.25 -r 1-5,10-15
+wait 20
+pr
+kget
+ldgcrm
+

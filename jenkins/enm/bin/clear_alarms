@@ -1,0 +1,64 @@
+#!/bin/bash
+
+#Simple script to clear out the alarms in Versant through cm cli with minimal input from the end user
+
+#Simple argument validation
+CLI_APP='/opt/ericsson/enmutils/bin/cli_app '
+CLEAR="clear"
+ACK="ack"
+
+function print_help(){
+    echo ''
+    echo 'Crude script for iterating through a list of netsim simulations and sending CM CLI commands to clear/ack the'
+    echo 'alarms in batches. Recommend piping to a background nohup process'
+    echo "Usage: $0  [-s start_index -e end_index] [-i interval (seconds)]"
+    echo ''
+    echo 'Example command:'
+    echo '      `clear_alarms -s 1 -e 30 -i 300`'
+    echo ''
+    echo 'Will iterate through NETSim simulations LTE01 -> LTE30 sending fmedit commands to clear/ack alarms with'
+    echo 'a pause interval of 5 minutes between each pair of commands being sent to script engine'
+    exit 0
+}
+
+
+if [ $# -lt 1 ]; then
+    print_help
+fi
+
+while getopts "s:e:i:h" opt;
+do
+    case ${opt} in
+        s ) START_INDEX=${OPTARG} ;;
+        e ) END_INDEX=${OPTARG} ;;
+        i ) INTERVAL=${OPTARG} ;;
+        h ) print_help ;;
+        \?) echo "Invalid option: -$OPTARG" >&2;exit 1;;
+    esac
+done
+
+if [ -z "${INTERVAL}" ];
+then
+    INTERVAL=180
+fi
+
+
+for count in $(seq ${START_INDEX} ${END_INDEX})
+do
+    if [ ${count} -lt 10 ];
+    then
+           ${CLI_APP} "fmedit set \* OpenAlarm.(objectOfReference==\*\"LTE0${count}\"\*) alarmState="${CLEAR}""
+           sleep 10
+           ${CLI_APP} "fmedit set \* OpenAlarm.(objectOfReference==\*\"LTE0${count}\"\*) alarmState="${ACK}""
+    else
+           ${CLI_APP} "fmedit set \* OpenAlarm.(objectOfReference==\*\"LTE${count}\"\*) alarmState="${CLEAR}""
+           sleep 10
+           ${CLI_APP} "fmedit set \* OpenAlarm.(objectOfReference==\*\"LTE${count}\"\*) alarmState="${ACK}""
+    fi
+
+    if [ ! ${count} -eq ${END_INDEX} ];
+    then
+        echo "Sleeping for ${INTERVAL} seconds between next simulation"
+        sleep ${INTERVAL}
+    fi
+done

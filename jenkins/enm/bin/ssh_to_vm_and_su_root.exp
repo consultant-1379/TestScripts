@@ -1,0 +1,193 @@
+#!/usr/bin/expect 
+
+set thisScript [ info script ]
+set vm_hostname [lindex $argv 0]
+set PATH_TO_ENMINST "/opt/ericsson/enminst/"
+set PATH_TO_CONSUL_EXE "/usr/bin/consul"
+set PATH_TO_KEY_PAIR_FILE "/var/tmp/enm_keypair.pem"
+set PATH_TO_VM_PRIVATE_KEY_FILE "/root/.ssh/vm_private_key"
+
+
+# U s a g e
+#
+if { $argc < 1 } {
+        puts "This script will auto-login to VM via cloud-user/litp-admin and then sudo/su to root"
+        puts "Syntax: $thisScript vm_hostname \[ \"command_to_be_executed_as_root_on_vm\" \]"
+        exit 0
+}
+
+
+# H o s t  C h e c k i n g
+#
+# Check Destination Host ...
+# Assuming that VMs will be one of the following form, hence use cloud-user to access the VM, otherwise use litp-admin
+set vm_MatchList {{*-*-*} {solr} {openidm} {visi*} {emailservice} {esmon}}
+
+set DESTINATION_HOST_IS_A_VM 0
+for {set i 0} {$i < [llength $vm_MatchList]} {incr i} {
+        if { [string match [lindex $vm_MatchList $i] $vm_hostname] } {
+                set DESTINATION_HOST_IS_A_VM 1
+                break
+        }
+}
+
+if { [string match visinamingnb $vm_hostname] } {
+        set litp_query "/usr/bin/litp show -p /deployments/enm/clusters/svc_cluster/configs/alias_configuration/aliases/visinamingnb_internal_alias -o address"
+        puts "Fetching visinamingnb IP from litp model using this command:"
+        puts "\"$litp_query\""
+        set vm_hostname [eval exec [split $litp_query " "] ]
+}
+
+# Check if Source Host is VNF_LAF
+set SOURCE_HOST_IS_VNF_LAF 0
+if {![file exists $PATH_TO_ENMINST]} {
+        set SOURCE_HOST_IS_VNF_LAF 1
+        if {[file exists $PATH_TO_ENMINST]} {
+                puts "Need to have keypair file located at $PATH_TO_KEY_PAIR_FILE for this script to access remote host"
+                exit 0
+        }
+}
+
+# S S H  O p t i o n s
+#
+# Setting up different SSH options depending on situation
+set SSH_OPTIONS ""
+if {$SOURCE_HOST_IS_VNF_LAF} {
+        set user "cloud-user"
+        set root_password "passw0rd"
+        set switch_user_cmd "sudo su -"
+        set SSH_OPTIONS "-i $PATH_TO_KEY_PAIR_FILE"
+
+} elseif {$DESTINATION_HOST_IS_A_VM} {
+        set user "cloud-user"
+        set root_password "passw0rd"
+        set switch_user_cmd "sudo su -"
+        set SSH_OPTIONS "-i $PATH_TO_VM_PRIVATE_KEY_FILE"
+
+} else {
+        set user "litp-admin"
+        set root_password "12shroot"
+        set switch_user_cmd "su -"
+}
+
+
+# O p e n   t h e   S S H   c o n n e c t i o n   t o   t h e   r e m o t e   h o s t
+#
+spawn -noecho /bin/sh -c "ssh $SSH_OPTIONS $user\@$vm_hostname"
+
+
+# Procedure to deal with offending key issue encountered during ssh attempt
+proc handle_offending_key { user vm_hostname data } {
+        foreach line [split $data "\n"] {
+                if {[string match "Offending key*" $line]} {
+                       regexp {(.*hosts):(\d+)} $line matched text hosts_line_number
+                        exec sed -i ${hosts_line_number}d /root/.ssh/known_hosts
+                }
+        }
+
+        puts "\n\nThe ssh key for $vm_hostname in /root/.ssh/known_hosts had expired and has now been removed by this script\n"
+
+        # In case of litp-admin user, need to interrupt the connection and prompt user to try again
+        if { [string match "litp-admin" $user] } {
+                puts "Try to connect again by re-running last command"
+                exit 0
+        }
+}
+
+
+# H a n d l e   a u t o m a t i c   l o g i n
+#
+set bad_root_prompt 0
+expect {
+        "Host key verification failed" {
+                handle_offending_key $user $vm_hostname $expect_out(buffer)
+                exp_continue
+
+        } "Offending key *\n" {
+                handle_offending_key $user $vm_hostname $expect_out(buffer)
+                exp_continue
+
+        } "$ " {
+                send "$switch_user_cmd\r"
+		expect {
+                        "assword: " {
+                                send "$root_password\r"
+                                exp_continue
+                        } "$ " {
+                                puts "\nNote: Prompt looks to be incorrect here - expecting '#' instead of '$'"
+                                send "\r"
+                                expect "$ "
+                                set bad_root_prompt 1
+
+                        } "# " {
+
+                        } "Permission denied" {
+                                puts "\nLooks like script cannot connect to $vm_hostname with $user"
+                                exit 0
+                        }
+                }
+
+
+        } "Name or service not known" {
+                puts "\nCheck $vm_hostname and retry"
+                exit 0
+
+        } "route to host" {
+                puts "\nCant access $vm_hostname"
+                exit 0
+
+        } "Connection refused" {
+                puts "\nCant access $vm_hostname"
+                exit 0
+
+        } "assword: " {
+                send "$root_password\r"
+                exp_continue
+
+        } "Are you sure you want to continue connecting (yes/no)? " {
+                send "yes\r"
+                exp_continue
+
+        } "consent to monitoring and data collection." {
+                expect "#####"
+                exp_continue
+
+        } "# " {
+
+        } "Permission denied" {
+                puts "\nLooks like script cannot connect to $vm_hostname with $user"
+                exit 0
+        }
+}
+
+
+# I n t e r a c t i v e   M o d e
+#
+# If any argument passed to this script, then script will login to VM, execute script and return control. 
+# Otherwise, script will operate in interactive Mode
+if { $argc > 1 } {
+        set command [lindex $argv 1]
+        send "$command\r"
+        if { $bad_root_prompt == 1 } {
+                expect "$ "
+        } else {
+                expect "# "
+        }
+
+        puts "\n"
+
+} else {
+        set dirname "/ericsson/3pp/jboss/standalone/log/"
+        set define_alias "alias boss=\"cd $dirname\""
+        send "$define_alias\r"
+        if { $bad_root_prompt == 1 } {
+                expect "$ "
+        } else {
+                expect "# "
+        }
+
+ 
+        interact
+}
+
+

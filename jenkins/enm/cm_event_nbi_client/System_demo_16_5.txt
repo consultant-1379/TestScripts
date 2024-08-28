@@ -1,0 +1,80 @@
+
+
+
+#### Set UP
+	export TARGET_SERVER="https://ieatenm5286-13.athtem.eei.ericsson.se/"
+	export TARGET_SERVER="https://ieatENM5326-1.athtem.eei.ericsson.se/"
+	export TARGET_SERVER="https://enmapache.athtem.eei.ericsson.se/"
+	
+	### Get cookie insecure
+		curl --insecure --request POST --cookie-jar cookie.txt "${TARGET_SERVER}/login?IDToken1=Administrator&IDToken2=TestPassw0rd"
+	
+#### DEMO 1 Show ends points and basic query parameters
+
+	Description : As a user of the NBI I want to be able to retrieve all events for all network element. I want to limit the number of events returned and I want to sort by the detection time from newest to oldest. 
+	
+	##### Get Root Context
+			
+	curl -s --insecure --request GET --cookie cookie.txt "${TARGET_SERVER}config-mgmt/event" | python -m json.tool
+
+		##### Get events limited to 2
+		curl -s --insecure --request GET --cookie cookie.txt "${TARGET_SERVER}config-mgmt/event/events?limit=2" | python -m json.tool
+		
+	##### Get two Event and Order by Descending Detection Time
+	
+	curl -s --insecure --request GET --cookie cookie.txt "${TARGET_SERVER}/config-mgmt/event/events?orderBy=eventDetectionTimestamp&limit=2" | python -m json.tool
+	
+#### DEMO 2 Non-Persistent Filter Query
+	
+	Description: As a user of the NBI I want to filter the events returned by a query using a non-persistent filter.
+	
+	#### Get all update events only 
+	curl -G -s --data-urlencode 'filterClauses=[{"attrName":"operationType","operator":"eq","attrValue":"UPDATE"}]'  --insecure --request GET  --cookie cookie.txt "${TARGET_SERVER}/config-mgmt/event/events?limit=2" | python -m json.tool
+	
+	#### Get All Events for a Specific Network Element
+	curl -G -s --data-urlencode 'filterClauses=[{"attrName":"targetName","operator":"eq","attrValue":"ieatnetsimv6048-01_LTE06ERBS00045"}]'  --insecure --request GET  --cookie cookie.txt "${TARGET_SERVER}/config-mgmt/event/events?limit=20" | python -m json.tool
+	
+	#### Get All Events for a Specific Managed Object 
+	curl -G -s --data-urlencode 'filterClauses=[{"attrName":"moClass","operator":"eq","attrValue":"EUtranCellFDD"}]'  --insecure --request GET  --cookie cookie.txt "${TARGET_SERVER}/config-mgmt/event/events?limit=20" | python -m json.tool
+
+	#### Get All Update Events for a Specific Managed Object on a Specifc Network Element Since a specific time
+	
+		Description: As a user of the NBI I want to filter for Update events on EUtranCellFDD for node LTE06ERBS00045 after 1pm this afternoon.
+		
+		### Show Filter
+		echo '[{"attrName":"operationType","operator":"eq","attrValue":"UPDATE"},{"attrName":"targetName","operator":"eq","attrValue":"LTE02ERBS00044"},{"attrName":"moClass","operator":"eq","attrValue":"EUtranCellFDD"},{"attrName":"eventRecordTimestamp","operator":"gt","attrValue":"2016-04-01T12:59:54Z"}]' | python -m json.tool
+		
+		### Lock Cell
+		/opt/ericsson/enmutils/bin/cli_app 'cmedit get *LTE06* CmFunction.syncStatus==SYNCHRONIZED -t'
+		/opt/ericsson/enmutils/bin/cli_app 'cmedit get LTE02ERBS00044 EUtranCellFDD.administrativeState'
+		/opt/ericsson/enmutils/bin/cli_app 'cmedit set ieatnetsimv6048-01_LTE06ERBS00045 EUtranCellFDD administrativeState=LOCKED'
+		
+		#### Execute command
+		curl -G -s --data-urlencode 'filterClauses=[{"attrName":"operationType","operator":"eq","attrValue":"UPDATE"},{"attrName":"targetName","operator":"contains","attrValue":"LTE02"},{"attrName":"moClass","operator":"eq","attrValue":"EUtranCellFDD"},{"attrName":"eventRecordTimestamp","operator":"gt","attrValue":"2016-04-01T12:59:54Z"}]'  --insecure --request GET  --cookie cookie.txt "${TARGET_SERVER}/config-mgmt/event/events?limit=20" | python -m json.tool
+		
+#### DEMO 3 Persistent Filter Query
+	Description: As a user of the NBI I want to filter the events returned by a query using a persistent filter. Peristed filters are created once and used repeatedly. 
+	
+	echo '{"filterName": "EUtranCellFDD Updates", "filterDescription": "Get All Update Events for a Specific Managed Object on a Specifc Network Element Since a specific time.", "filterClauses" : [{"attrName":"operationType","operator":"eq","attrValue":"UPDATE"},{"attrName":"targetName","operator":"eq","attrValue":"ieatnetsimv6048-01_LTE06ERBS00045"},{"attrName":"moClass","operator":"eq","attrValue":"EUtranCellFDD"},{"attrName":"eventRecordTimestamp","operator":"gt","attrValue":"2016-04-01T12:59:54Z"}] }' | python -m json.tool
+	
+	echo '{"filterName": "EUtranCellFDD Updates", "filterDescription": "Get All Update Events for a Specific Managed Object on a Specifc Network Element Since a specific time.", "filterClauses" : [{"attrName":"operationType","operator":"eq","attrValue":"UPDATE"},{"attrName":"targetName","operator":"eq","attrValue":"ieatnetsimv6048-01_LTE06ERBS00045"},{"attrName":"moClass","operator":"eq","attrValue":"EUtranCellFDD"},{"attrName":"eventRecordTimestamp","operator":"gt","attrValue":"2016-04-01T12:59:54Z"}] }' > Eutrancell_filter_LTE45.json
+	
+	echo '{"filterName": "EUtranCellFDD Updates", "filterDescription": "Get All Update Events for a Specific Managed Object on a Specifc Network Element Since a specific time.", "filterClauses" : [{"attrName":"operationType","operator":"eq","attrValue":"UPDATE"},{"attrName":"targetName","operator":"eq","attrValue":"ieatnetsimv6048-01_LTE06ERBS00044"},{"attrName":"moClass","operator":"eq","attrValue":"EUtranCellFDD"},{"attrName":"eventRecordTimestamp","operator":"gt","attrValue":"2016-04-01T12:59:54Z"}] }' > Eutrancell_filter_LTE44.json
+	
+	curl -H "Content-Type: application/json" -X POST --data-binary "@Eutrancell_filter_LTE44.json" --cookie cookie.txt -s --insecure "${TARGET_SERVER}/config-mgmt/event/filters" | python -m json.tool
+	
+	curl -H "Content-Type: application/json" -X POST --data-binary "@Eutrancell_filter_LTE45.json" --cookie cookie.txt -s --insecure "${TARGET_SERVER}/config-mgmt/event/filters" | python -m json.tool
+	
+	RF4W4W5O47KTK
+	Q7B3G5PFJYZKY
+	
+	#### Read all filters
+
+	curl -s --insecure --request GET --cookie cookie.txt "${TARGET_SERVER}/config-mgmt/event/filters"  | python -m json.tool
+
+	curl -G -s --data-urlencode 'filterIds=["STSAAAD2Z23DA"]'  --insecure --request GET --cookie cookie.txt "${TARGET_SERVER}/config-mgmt/event/events" | python -m json.tool
+	
+	######## Combined (OR) filters. Get events for multiple nodes.
+	
+	curl -G -s --data-urlencode 'filterIds=["RF4W4W5O47KTK","Q7B3G5PFJYZKY"]'  --insecure --request GET --cookie cookie.txt "${TARGET_SERVER}/config-mgmt/event/events" | python -m json.tool
+	

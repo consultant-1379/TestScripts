@@ -1,0 +1,61 @@
+#!/bin/bash
+
+FILENAME=~/gcAccumulatorMonitor.log
+
+
+usage() {
+        if [ $# -ne 1 ] ; then
+                echo "Usage: $0 timeDelayInMins"
+                echo "Usage: $0 60"
+                echo "This script needs to run wherever versant is running e.g. db-1 on one of the blades"
+                exit 1
+        fi
+}
+
+usage $*;
+
+SLEEPTIME=$(($1 * 60))
+
+NUMBER_OF_NODES=0
+PREVIOUS_GC_TOTAL_VALUE=0
+CURRENT_GC_TOTAL_VALUE=0
+DATE=""
+
+printIntroduction(){
+        DATE=$(date +"%d-%m-%y_%H:%M:%S")
+        echo Running the validator for $NUMBER_OF_NODES nodes every $SLEEPTIME seconds. Setting the previous GC count to $PREVIOUS_GC_TOTAL_VALUE  >> $FILENAME
+}
+
+getNumberOfNodes(){
+        NUMBER_OF_NODES=($(/ericsson/versant/bin/db2tty -d dps_integration -i ns_CPP_MED.Pt_CppConnectivityInformation | egrep "*" -A20 | egrep "fdn|bucketName|generationCounter "  | grep "##"  | awk 'NR%3 {printf("%s", $0); next}  {print $0} ' | grep -c Live))
+}
+getPreviousGcTotalValue(){
+        PREVIOUS_GC_TOTAL_VALUE=($(awk 'END {print $NF}' $FILENAME))
+}
+
+getCurrentGcTotalValue(){
+        DATE=$(date +"%d-%m-%y_%H:%M:%S")
+        CURRENT_GC_TOTAL_VALUE=($(/ericsson/versant/bin/db2tty -d dps_integration -i ns_CPP_MED.Pt_CppConnectivityInformation | egrep "*" -A20 | egrep "fdn|bucketName|generationCounter "  | grep "##"  | awk 'NR%3 {printf("%s", $0); next}  {print $0} ' | grep Live | awk '{ print $9}' | awk '{s+=$0} END {print s}'))
+}
+getGCDifference(){
+        DIFFERENCE=`expr $CURRENT_GC_TOTAL_VALUE - $PREVIOUS_GC_TOTAL_VALUE`
+}
+logResult(){
+        echo $DATE For $NUMBER_OF_NODES nodes, the GC difference between previous and current is $DIFFERENCE. The current GC is $CURRENT_GC_TOTAL_VALUE  >> $FILENAME
+}
+
+startScript(){
+        while true
+        do
+                getPreviousGcTotalValue
+                getCurrentGcTotalValue
+                getGCDifference
+                getNumberOfNodes
+                logResult
+                sleep $SLEEPTIME
+        done
+
+}
+getNumberOfNodes
+printIntroduction
+startScript

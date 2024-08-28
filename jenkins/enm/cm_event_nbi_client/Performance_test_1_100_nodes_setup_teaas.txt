@@ -1,0 +1,116 @@
+### Enable JMS Divert for NetworkElementNotifications (CPP) ComEcimMdbNotificationListener_0 (COM/ECIM)
+	
+	#On db-1 (JMS-Server) if this fails try db-2. 
+	# Need to run against node with jms server configured. 
+	ssh litp-admin@db-1
+	su - 
+	
+	/ericsson/3pp/jboss/bin/jboss-cli.sh --connect
+	
+	/subsystem=messaging/hornetq-server=default/divert=cpp-mediation-divert:add(divert-address=jms.queue.NetworkElementNotifications,forwarding-address=jms.queue.CmDataChangeQueue,exclusive=false,filter="__is_resent IS NULL")
+ 
+    /subsystem=messaging/hornetq-server=default/divert=com-ecim-mediation-divert:add(divert-address=jms.queue.ComEcimMdbNotificationListener_0,forwarding-address=jms.queue.CmDataChangeQueue,exclusive=false)
+	
+	### Remove divert
+	/subsystem=messaging/hornetq-server=default/divert=cpp-mediation-divert:remove
+	/subsystem=messaging/hornetq-server=default/divert=com-ecim-mediation-divert:remove
+	
+	
+	#### Check Queues
+	
+	/subsystem=messaging/hornetq-server=default/jms-queue=
+/subsystem=messaging/hornetq-server=default/jms-queue=DLQ:read-resource(include-runtime=true)
+/subsystem=messaging/hornetq-server=default/jms-queue=CmDataChangeQueue:read-resource(include-runtime=true)
+/subsystem=messaging/hornetq-server=default/jms-queue=NetworkElementNotifications:read-resource(include-runtime=true)
+
+#### Enable events onto the cm data change event queue
+
+	/ericsson/pib-scripts/etc/config.py update --app_server_address svc-2-dchistory:8080 --name=CM_EVENTS_PROCESSING_ENABLED --value=true --service_identifier=cm-events-data-change-listener
+	
+#### Watch Solr for events being recorded
+	
+	watch -n5 "curl -s 'http://solr:8983/solr/admin/cores?action=STATUS&wt=json&indent=true' | grep numDoc"
+	
+	
+######Change hange log level.
+
+	ssh -i ~/.ssh/vm_private_key cloud-user@dchistory-1-internal
+	/ericsson/3pp/jboss/bin/jboss-cli.sh --connect
+	
+	/subsystem=logging/logger=org.hornetq.jms.client:add(level=ERROR)
+
+	
+	
+###### Install ENM Utilities (production & internal RPMs)
+
+	http://confluence-nam.lmera.ericsson.se/pages/viewpage.action?pageId=83171295
+	
+	##### Commands
+	# nexus='https://arm1s11-eiffel004.eiffel.gic.ericsson.se:8443/nexus'; 
+	# nexus='https://arm1s11-eiffel004.eiffel.gic.ericsson.se:8443/nexus'; 
+	# gr='com.ericsson.dms.torutility'; art='ERICtorutilitiesinternal_CXP9030579'; 
+	# ver=`/usr/bin/repoquery -a --repoid=ms_repo --qf "%{version}" ERICtorutilities_CXP9030570`; 
+	# wget -O $art-$ver.rpm "$nexus/service/local/artifact/maven/redirect?r=releases&g=${gr}&a=${art}&v=${ver}&e=rpm"
+	# yum install -y $art-$ver.rpm
+	 
+	
+	##### Must ask Simon how to have this as a one liner for remote execution from Jenkins Slave over SSH. 
+	##### Would need to handle if the package was already installed. 
+
+	
+	#### On MS run:
+	nexus='https://arm1s11-eiffel004.eiffel.gic.ericsson.se:8443/nexus'; gr='com.ericsson.dms.torutility'; art='ERICtorutilitiesinternal_CXP9030579'; ver=`/usr/bin/repoquery -a --repoid=ms_repo --qf "%{version}" ERICtorutilities_CXP9030570`; wget -O $art-$ver.rpm "$nexus/service/local/artifact/maven/redirect?r=releases&g=${gr}&a=${art}&v=${ver}&e=rpm" ; yum install -y $art-$ver.rpm
+
+###### 2 - Network Definition
+	
+	
+	#### Add node license
+	lcmadm install file: license.txt
+	
+	echo "14 FAT1023443 Ni LONG NORMAL NETWORK EXCL INFINITE_KEYS INFINITE_KEYS 15 FEB 2016 16 AUG 2016 NO_SHR SLM_CODE 1 NON_COMMUTER NO_GRACE DEMO NON_REDUNDANT Ni NO_HLD 20 VP_Dynamic_CM_NBI_numberOf_5MHzSC nMr740kQCAH7y6CqFLmhVn8FRRbffvgg,itupxDg,hLTOj1iABUm667ZeLByhD8RfqpehLIyTJ15p7g2C9yoI7386dXhK78m2tFSboabYKXsVv" >> /var/tmp/license.txt ; /opt/ericsson/enmutils/bin/cli_app 'lcmadm install file:license.txt' /var/tmp/license.txt
+	
+#### List Simulations available. 
+	export TARGET_SERVER="ieatnetsimv6019-01"
+	export TARGET_SERVER="netsim"
+	
+	export TARGET_SERVER="ieatnetsimv6048-01"
+
+	http://confluence-nam.lmera.ericsson.se/display/EM/16.01+AND+16.02+5K+Simulations+and+Node+Distribution+Per+Team
+	
+	http://confluence-nam.lmera.ericsson.se/display/TORRV/node_populator
+	
+	##### Commands
+	
+	/opt/ericsson/enmutils/bin/netsim fetch ${TARGET_SERVER} /var/tmp/arne-xmls
+	
+	### Interested in seeing LTEG1220-limx160-FT-FDD-LTE01
+	# LTEG1260-V2limx160-5K-FDD-LTE01
+	/opt/ericsson/enmutils/bin/netsim list ${TARGET_SERVER}
+	
+	### Should see just five. 
+	
+	
+	/opt/ericsson/enmutils/bin/netsim fetch ${TARGET_SERVER} LTEG1220-limx160-FT-FDD-LTE02 /var/tmp/arne-xmls
+	
+	/opt/ericsson/enmutils/bin/netsim fetch ${TARGET_SERVER} LTEE163-V3x160-5K-FDD-LTE06 /var/tmp/arne-xmls
+	
+	/opt/ericsson/enmutils/bin/node_populator parse test_nodes /var/tmp/arne-xmls
+		
+	## Make sure nodes are started
+	/netsim/inst/netsim_pipe
+
+#### add and sync 100 nodes
+
+	/opt/ericsson/enmutils/bin/node_populator populate test_nodes 144 --verbose
+	
+#### setup workload for 100 nodes
+
+	http://confluence-nam.lmera.ericsson.se/display/TORRV/workload
+	
+	/opt/ericsson/enmutils/bin/workload add test_nodes 1-100
+	
+	# Edit cmsync_02.py for 100 nodes and 80 AVCS
+	
+	/opt/ericsson/enmutils/bin/workload start cmsync_02
+	
+	/opt/ericsson/enmutils/bin/cli_app 'cmedit get * CmFunction.syncStatus==SYNCHRONIZED'

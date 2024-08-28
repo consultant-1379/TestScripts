@@ -1,0 +1,22 @@
+#!/bin/bash
+
+parent_path=$( cd "$(dirname "${BASH_SOURCE}")" ; pwd -P )
+date=`date +%d/%m/%y`
+
+get_cluster_id(){
+    if [ -f /var/ericsson/ddc_data/config/ddp.txt ]; then
+        clusterId=`awk -F'_' '{print $2}' /var/ericsson/ddc_data/config/ddp.txt`
+    else
+        clusterId=$HOSTNAME
+    fi
+}
+
+send_mail(){
+    subject_string="${clusterId}: Report - ${date}"
+    python ${parent_path}/python_scripts/create_email_body.py
+    /opt/ericsson/enmutils/bin/emailer "${subject_string}" ${clusterId} PDLENM14BR@pdl.internal.ericsson.com /tmp/email-report-body.html
+}
+
+get_cluster_id
+send_mail
+

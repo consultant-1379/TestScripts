@@ -1,0 +1,16 @@
+#!/bin/sh
+SIMLIST=''LTE16A-V18x160-60K-DG2-FDD-LTE124''
+# NODES=''LTE120dg2ERBS00078' 'LTE120dg2ERBS00100' 'LTE120dg2ERBS00112' 'LTE120dg2ERBS00128''
+NODES=''LTE124dg2ERBS00049' 'LTE124dg2ERBS00065' 'LTE124dg2ERBS00103''
+for NODE in $NODES
+
+ do
+
+
+        echo ".open $SIMLIST"
+        echo ".selectnocallback $NODE"
+        echo '.stop -parallel'
+        echo ".restoredborfsdialog dbs .restorenedatabase resp /netsim/netsimdir/$SIMLIST curr!!!auto"
+        echo ".restorenedatabase /netsim/netsimdir/$SIMLIST/allsaved/dbs/curr"
+        echo '.start -parallel'
+ done

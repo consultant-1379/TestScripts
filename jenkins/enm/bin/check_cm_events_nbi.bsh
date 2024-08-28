@@ -1,0 +1,21 @@
+#!/bin/bash
+PROCESS=cm_events_nbi_kpi_checks.py
+start_cm_events_nbi(){
+    rm -f ~/cm_nbi now
+    logger INFO "$FUNCNAME - $(date)"
+    logger INFO "setting up CM NBI"
+    /bin/mkdir -p /ericsson/enm/dumps/cm_event_nbi_client
+    HTTP=`cat /etc/hosts | grep haproxy | awk {'print $3'}`
+    echo "/usr/bin/python -u /root/rvb/cm_event_nbi_client/cm_events_nbi_kpi_checks.py -m560 -r10000 -c10 -i .5 -k -b -t 60 -z -e \"${HTTP}\" >> /ericsson/enm/dumps/cm_event_nbi_client/cm_events_nbi_kpi_checks.log 2>&1" > ~/cm_nbi
+    at -f ~/cm_nbi now
+
+}
+
+if ps ax | grep -v grep | grep $PROCESS > /dev/null
+then
+        logger INFO "cm_events_nbi_kpi_checks.py is running"
+else
+        logger INFO "${PROCESS} is not running"
+        start_cm_events_nbi
+fi
+

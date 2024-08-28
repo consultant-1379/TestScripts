@@ -1,0 +1,83 @@
+#!/usr/bin/expect
+
+set sourcedScript [ info script ]
+set DUMPS_DIR "/ericsson/enm/dumps"
+set SCRIPTS_DIR "$DUMPS_DIR/.scripts"
+set SCRIPT_FILE ".extract_data_from_last_undefined_vm.sh"
+set RVB_DIR [file dirname $argv0]
+
+puts "This expect script will login to blade and execute $SCRIPTS_DIR/$SCRIPT_FILE"
+
+if  { $argc < 1 } {
+        puts "\nUsage: $sourcedScript   blade_hostname   \[service_group\]\n"
+        exit 0
+}
+
+set hostname [lindex $argv 0]
+set service_group [lindex $argv 1]
+set timeout 30
+
+puts "\n========================================================"
+puts "Attempting to extract data for $hostname $service_group "
+
+# Need to have this script in an SFS folder so that the script can be run on the blade
+if {![file exists $SCRIPTS_DIR/.$SCRIPT_FILE]} {
+        if {![file exists $SCRIPTS_DIR]} {
+                eval exec "/bin/mkdir -p $SCRIPTS_DIR"
+        }
+        eval exec "/bin/cp -p $RVB_DIR/../dumps_dir/$SCRIPT_FILE $SCRIPTS_DIR/$SCRIPT_FILE" 
+}
+
+
+spawn -noecho /bin/sh -c "ssh litp-admin@$hostname"
+
+expect {
+        "$ " {
+                send "su -\r"
+                exp_continue
+
+        } "Are you sure you want to continue connecting (yes/no)?" {
+                send "yes\r"
+                exp_continue
+
+        } "consent to monitoring and data collection." {
+                expect "#####"
+                exp_continue
+
+        } "assword: " {
+                send "12shroot\r"
+                exp_continue
+
+        } "# " {
+                puts "Checking if Guestfish is installed on $hostname"
+                send "\[\[ -f /usr/bin/virt-copy-out \]\] \&\& echo guestfish_is_installed \|\| echo guestfish_is_not_installed\r"
+                expect {
+                        "\nguestfish_is_installed" {
+                                puts "\nGuestfish already installed on $hostname so proceeding to extract data now"
+                                puts "Running the data extraction script:"
+                                send "$SCRIPTS_DIR/$SCRIPT_FILE $service_group\r"
+                                expect "Script " 
+                                expect {
+                                        "Extracting data " {
+                                                set timeout 120
+                                                exp_continue
+                                        } "# " {
+                                                puts "Extract completed on $hostname $service_group"
+                                                puts "========================================================\n"
+                                        }
+                                }
+
+                        } "\nguestfish_is_not_installed" {
+                               puts "Guestfish not installed on $hostname, so installing now ..."
+                               send "yum -y install guestfish\r"
+                               expect "Complete!" {
+                                        puts "... Guestfish installed on $hostname" 
+                                        puts "\n\n\nYou need to re-run this $sourcedScript script in order to retry the extract "
+                               }
+                        }
+                }
+        }
+}
+
+
+

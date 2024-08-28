@@ -1,0 +1,35 @@
+#!/bin/bash
+
+TAG="EMT_USER"
+LOGFILE="/ericsson/enm/dumps/${TAG}_delete_logfile.txt"
+
+### Find the Group Id for the Quarantine group which has been created by EMT
+GID=$(grep quarantine /etc/group | cut -d':' -f3)
+
+### Fetch the Users with the matching group id in /etc/passwd
+USERS=($(awk -F":" "\$4==${GID} {print \$1}" /etc/passwd | grep -v taf_user))
+
+echo "$(date +%F_%T):Total user count: ${#USERS[@]}" >> ${LOGFILE}
+
+for USER in ${USERS[@]}; do
+
+   #USER=$(echo ${element} | cut -d':' -f1)
+   echo "$(date +%F_%T):Check following User session still running - ${USER} and delete if not." >> ${LOGFILE}
+  
+   ### Check if the User has any active terminal
+   U_EXIST=$(who | grep ${USER})
+   
+   if [[ $? -eq 0  && -n ${U_EXIST} ]]
+   then
+      echo "$(date +%F_%T):User ${USER} still exist in active terminal. Try again after sometime" >> ${LOGFILE}
+   else
+      echo "$(date +%F_%T):User ${USER} shall be removed using \"userdel -fr ${USER}\"" >> ${LOGFILE}
+      /bin/logger -i -p info "${TAG}" "deleting emt user" "${USER}"
+      /usr/sbin/userdel -fr ${USER}
+      echo "$(date +%F_%T):User ${USER} has been deleted" >> ${LOGFILE}
+   fi
+
+done
+
+
+
